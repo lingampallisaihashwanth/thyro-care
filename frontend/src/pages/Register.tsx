@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { StaticLogo } from "../components/Logo";
+import { PasswordInput } from "../components/PasswordInput";
 import { useAuth } from "../hooks/useAuth";
 
 const registerSchema = z
@@ -75,7 +76,7 @@ export const Register = () => {
 
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft"
+          className="rounded-lg border border-slate-200 bg-white p-6 pr-20 shadow-soft sm:p-6"
         >
           <div className="grid h-12 w-12 place-items-center rounded-lg bg-thyro-mint text-thyro-green">
             <UserPlus className="h-6 w-6" />
@@ -141,11 +142,7 @@ export const Register = () => {
                 <LockKeyhole className="h-4 w-4 text-thyro-green" />
                 Password
               </span>
-              <input
-                type="password"
-                className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
-                {...register("password")}
-              />
+              <PasswordInput autoComplete="new-password" {...register("password")} />
               {errors.password && (
                 <span className="mt-1 block text-xs font-semibold text-thyro-red">
                   {errors.password.message}
@@ -155,9 +152,8 @@ export const Register = () => {
 
             <label className="block text-sm">
               <span className="font-bold text-slate-700">Confirm Password</span>
-              <input
-                type="password"
-                className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
+              <PasswordInput
+                autoComplete="new-password"
                 {...register("confirmPassword")}
               />
               {errors.confirmPassword && (

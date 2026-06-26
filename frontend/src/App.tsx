@@ -6,10 +6,12 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { About } from "./pages/About";
 import { Certifications } from "./pages/Certifications";
 import { Contact } from "./pages/Contact";
+import { ForgotPassword } from "./pages/ForgotPassword";
 import { Home } from "./pages/Home";
 import { Login } from "./pages/Login";
 import { Profile } from "./pages/Profile";
 import { Register } from "./pages/Register";
+import { ResetPassword } from "./pages/ResetPassword";
 import { Tests } from "./pages/Tests";
 
 const AppShell = () => (
@@ -43,6 +45,8 @@ export const App = () => (
       <Route path="/contact" element={<Contact />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/profile" element={<Profile />} />
       </Route>

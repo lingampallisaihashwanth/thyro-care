@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { StaticLogo } from "../components/Logo";
+import { PasswordInput } from "../components/PasswordInput";
 import { useAuth } from "../hooks/useAuth";
 
 const loginSchema = z.object({
@@ -18,6 +19,7 @@ type LocationState = {
   from?: {
     pathname?: string;
   };
+  passwordReset?: boolean;
 };
 
 export const Login = () => {
@@ -27,6 +29,9 @@ export const Login = () => {
   const location = useLocation();
   const state = location.state as LocationState | null;
   const from = state?.from?.pathname || "/profile";
+  const passwordResetMessage = state?.passwordReset
+    ? "Your password has been reset successfully. Please login with your new password."
+    : "";
   const {
     register,
     handleSubmit,
@@ -68,7 +73,7 @@ export const Login = () => {
 
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft"
+          className="rounded-lg border border-slate-200 bg-white p-6 pr-20 shadow-soft sm:p-6"
         >
           <div className="grid h-12 w-12 place-items-center rounded-lg bg-thyro-sky text-thyro-blue">
             <LogIn className="h-6 w-6" />
@@ -99,11 +104,7 @@ export const Login = () => {
               <LockKeyhole className="h-4 w-4 text-thyro-green" />
               Password
             </span>
-            <input
-              type="password"
-              className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
-              {...register("password")}
-            />
+            <PasswordInput autoComplete="current-password" {...register("password")} />
             {errors.password && (
               <span className="mt-1 block text-xs font-semibold text-thyro-red">
                 {errors.password.message}
@@ -111,9 +112,24 @@ export const Login = () => {
             )}
           </label>
 
+          <div className="mt-3 text-right">
+            <Link
+              to="/forgot-password"
+              className="text-sm font-bold text-thyro-blue transition hover:text-thyro-navy"
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
           {formError && (
             <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-thyro-red">
               {formError}
+            </p>
+          )}
+
+          {passwordResetMessage && !formError && (
+            <p className="mt-4 rounded-md bg-thyro-mint px-4 py-3 text-sm font-bold text-thyro-green">
+              {passwordResetMessage}
             </p>
           )}
 

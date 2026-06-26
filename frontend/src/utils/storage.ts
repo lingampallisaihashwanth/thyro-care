@@ -45,6 +45,18 @@ export const updateRegisteredUser = (updates: Partial<RegisteredUser>) => {
   return updated;
 };
 
+export const updateRegisteredPasswordForEmail = (
+  email: string,
+  password: string,
+) => {
+  const current = getRegisteredUser();
+  if (!current || current.email.toLowerCase() !== email.trim().toLowerCase()) {
+    return null;
+  }
+
+  return updateRegisteredUser({ password });
+};
+
 export const startSession = (email: string) => {
   if (canUseStorage()) {
     window.localStorage.setItem(STORAGE_KEYS.sessionEmail, email);
