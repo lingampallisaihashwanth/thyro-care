@@ -1,23 +1,35 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Bell,
-  CalendarDays,
   ClipboardList,
+  Download,
   FileText,
+  Languages,
   LockKeyhole,
+  MessageCircle,
+  Phone,
   Settings,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { EmptyState } from "../components/EmptyState";
 import { StaticLogo } from "../components/Logo";
 import { formatPrice } from "../data/tests";
 import { useAuth } from "../hooks/useAuth";
-import { getApiErrorMessage, getBookings, getNotifications, getReports } from "../services/api";
-import type { Booking, Notification, Report } from "../types";
+import { normalizeLanguage, supportedLanguages } from "../i18n";
+import {
+  cancelBooking,
+  getApiErrorMessage,
+  getBookings,
+  getNotifications,
+  getReports,
+} from "../services/api";
+import { subscribeToBookingChanges } from "../services/supabaseRealtime";
+import type { Booking, BookingStatus, LanguagePreference, Notification, Report } from "../types";
 
 const editProfileSchema = z.object({
   fullName: z.string().min(2, "Full name is required."),
@@ -42,22 +54,43 @@ type ProfileLocationState = {
   bookingSuccess?: string;
   booking?: Booking;
 };
+type BookingDialogState =
+  | { type: "confirm-cancel"; booking: Booking }
+  | { type: "cannot-cancel"; booking: Booking }
+  | null;
+
+const contactLinks = {
+  call: "tel:9985931929",
+  whatsapp: "https://wa.me/919985931929",
+};
+
+const upcomingStatuses = new Set<BookingStatus>([
+  "Requested",
+  "Pending",
+  "Confirmed",
+  "Sample Collection Scheduled",
+  "Sample Collected",
+  "Processing",
+]);
+
+const previousStatuses = new Set<BookingStatus>([
+  "Completed",
+  "Cancelled",
+  "Report Ready",
+]);
+
+const cancellableStatuses = new Set<BookingStatus>(["Requested", "Pending"]);
 
 const bookingKey = (booking: Booking) =>
   booking.id ?? `${booking.userEmail}-${booking.testName}-${booking.createdAt}`;
 
-const mergeBookings = (primary: Booking[], secondary: Booking[]) => {
-  const merged = new Map<string, Booking>();
-
-  [...primary, ...secondary].forEach((booking) => {
-    merged.set(bookingKey(booking), booking);
-  });
-
-  return [...merged.values()];
-};
-
-const valueOrFallback = (value?: string, fallback = "Not Provided") =>
+const valueOrFallback = (value?: string | null, fallback = "Not Provided") =>
   value && value.trim() ? value : fallback;
+
+const parseBookingDate = (booking: Booking) => {
+  const parsed = new Date(`${booking.bookingDate}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+};
 
 const formatBookingDate = (date: string) => {
   const parsed = new Date(`${date}T00:00:00`);
@@ -72,7 +105,11 @@ const formatBookingDate = (date: string) => {
   }).format(parsed);
 };
 
-const formatDateTime = (value: string) => {
+const formatDateTime = (value?: string | null) => {
+  if (!value) {
+    return "Not Available";
+  }
+
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
@@ -89,6 +126,9 @@ const formatDateTime = (value: string) => {
 
 export const Profile = () => {
   const { user, updateUser, changePassword } = useAuth();
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -99,8 +139,15 @@ export const Profile = () => {
   const [activePanel, setActivePanel] = useState<SettingsPanel>("edit");
   const [settingsMessage, setSettingsMessage] = useState("");
   const [settingsError, setSettingsError] = useState("");
+  const [languageMessage, setLanguageMessage] = useState("");
+  const [languageError, setLanguageError] = useState("");
   const [pageMessage, setPageMessage] = useState("");
-  const location = useLocation();
+  const [bookingDialog, setBookingDialog] = useState<BookingDialogState>(null);
+  const [cancelError, setCancelError] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const userEmail = user?.email ?? "";
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
 
   const editForm = useForm<EditProfileValues>({
     resolver: zodResolver(editProfileSchema),
@@ -119,58 +166,66 @@ export const Profile = () => {
     },
   });
 
-  useEffect(() => {
-    if (user) {
-      let isActive = true;
-
-      setApiLoading(true);
-      setBookingsError("");
-      setReportsError("");
-      setNotificationsError("");
-
-      Promise.allSettled([
-        getBookings({ userEmail: user.email }),
-        getReports(),
-        getNotifications(),
-      ])
-        .then(([bookingsResult, reportsResult, notificationsResult]) => {
-          if (!isActive) {
-            return;
-          }
-
-          if (bookingsResult.status === "fulfilled") {
-            setBookings((current) => mergeBookings(bookingsResult.value, current));
-          } else {
-            setBookingsError(getApiErrorMessage(bookingsResult.reason));
-          }
-
-          if (reportsResult.status === "fulfilled") {
-            setReports(reportsResult.value);
-          } else {
-            setReportsError(getApiErrorMessage(reportsResult.reason));
-          }
-
-          if (notificationsResult.status === "fulfilled") {
-            setNotifications(notificationsResult.value);
-          } else {
-            setNotificationsError(getApiErrorMessage(notificationsResult.reason));
-          }
-        })
-        .finally(() => {
-          if (isActive) {
-            setApiLoading(false);
-          }
-        });
-
-      return () => {
-        isActive = false;
-      };
+  const loadProfileData = useCallback(async () => {
+    if (!userEmail) {
+      return;
     }
 
-    setBookings([]);
-    setReports([]);
-    setNotifications([]);
-  }, [user]);
+    setApiLoading(true);
+    setBookingsError("");
+    setReportsError("");
+    setNotificationsError("");
+
+    try {
+      const [bookingsResult, reportsResult, notificationsResult] =
+        await Promise.allSettled([
+          getBookings({ userEmail }),
+          getReports(),
+          getNotifications(),
+        ]);
+
+      if (bookingsResult.status === "fulfilled") {
+        setBookings(bookingsResult.value);
+      } else {
+        setBookingsError(getApiErrorMessage(bookingsResult.reason));
+      }
+
+      if (reportsResult.status === "fulfilled") {
+        setReports(reportsResult.value);
+      } else {
+        setReportsError(getApiErrorMessage(reportsResult.reason));
+      }
+
+      if (notificationsResult.status === "fulfilled") {
+        setNotifications(notificationsResult.value);
+      } else {
+        setNotificationsError(getApiErrorMessage(notificationsResult.reason));
+      }
+    } finally {
+      setApiLoading(false);
+    }
+  }, [userEmail]);
+
+  useEffect(() => {
+    if (!userEmail) {
+      setBookings([]);
+      setReports([]);
+      setNotifications([]);
+      return;
+    }
+
+    void loadProfileData();
+  }, [loadProfileData, userEmail]);
+
+  useEffect(() => {
+    if (!userEmail) {
+      return undefined;
+    }
+
+    return subscribeToBookingChanges(userEmail, () => {
+      void loadProfileData();
+    });
+  }, [loadProfileData, userEmail]);
 
   useEffect(() => {
     const state = location.state as ProfileLocationState | null;
@@ -178,27 +233,78 @@ export const Profile = () => {
       setPageMessage(state.bookingSuccess);
     }
     if (state?.booking) {
-      setBookings((current) => mergeBookings([state.booking as Booking], current));
+      setBookings((current) => {
+        const next = new Map<string, Booking>();
+        [state.booking as Booking, ...current].forEach((booking) => {
+          next.set(bookingKey(booking), booking);
+        });
+        return [...next.values()];
+      });
+      void loadProfileData();
     }
 
     if (location.hash) {
       const element = document.querySelector(location.hash);
       element?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [location.hash, location.state]);
+  }, [loadProfileData, location.hash, location.state]);
+
+  const reportsByBookingId = useMemo(() => {
+    const reportMap = new Map<string, Report>();
+
+    reports.forEach((report) => {
+      if (report.bookingId && report.reportUrl) {
+        reportMap.set(report.bookingId, report);
+      }
+    });
+
+    return reportMap;
+  }, [reports]);
+
+  const upcomingBookings = useMemo(
+    () =>
+      bookings
+        .filter((booking) => upcomingStatuses.has(booking.status))
+        .sort((a, b) => {
+          const first = parseBookingDate(a) ?? Number.MAX_SAFE_INTEGER;
+          const second = parseBookingDate(b) ?? Number.MAX_SAFE_INTEGER;
+          return first - second;
+        }),
+    [bookings],
+  );
+
+  const previousBookings = useMemo(
+    () =>
+      bookings
+        .filter((booking) => previousStatuses.has(booking.status))
+        .sort((a, b) => {
+          const first = parseBookingDate(a) ?? 0;
+          const second = parseBookingDate(b) ?? 0;
+          return second - first;
+        }),
+    [bookings],
+  );
 
   if (!user) {
     return null;
   }
 
+  const currentLanguage = normalizeLanguage(user.languagePreference);
+  const selectableLanguages = supportedLanguages.filter(
+    (language) => language.isSelectable,
+  );
+
   const personalInfo = [
-    { label: "Full Name", value: valueOrFallback(user.fullName) },
-    { label: "Phone Number", value: valueOrFallback(user.phone) },
-    { label: "Email", value: valueOrFallback(user.email) },
-    { label: "Date Of Birth", value: valueOrFallback(user.dateOfBirth) },
-    { label: "Gender", value: valueOrFallback(user.gender) },
-    { label: "Address", value: valueOrFallback(user.address) },
-    { label: "Profile Photo", value: user.profilePhoto ? "Uploaded" : "Not Uploaded" },
+    { label: tr("profile.personal.fullName", "Full Name"), value: valueOrFallback(user.fullName) },
+    { label: tr("profile.personal.phoneNumber", "Phone Number"), value: valueOrFallback(user.phone) },
+    { label: tr("profile.personal.email", "Email"), value: valueOrFallback(user.email) },
+    { label: tr("profile.personal.dateOfBirth", "Date Of Birth"), value: valueOrFallback(user.dateOfBirth) },
+    { label: tr("profile.personal.gender", "Gender"), value: valueOrFallback(user.gender) },
+    { label: tr("profile.personal.address", "Address"), value: valueOrFallback(user.address) },
+    {
+      label: tr("profile.personal.profilePhoto", "Profile Photo"),
+      value: user.profilePhoto ? tr("profile.personal.uploaded", "Uploaded") : tr("profile.personal.notUploaded", "Not Uploaded"),
+    },
   ];
 
   const onEditProfile = async (values: EditProfileValues) => {
@@ -209,7 +315,7 @@ export const Profile = () => {
         fullName: values.fullName.trim(),
         phone: values.phone.trim(),
       });
-      setSettingsMessage("Profile updated in the database.");
+      setSettingsMessage(tr("profile.messages.profileUpdated", "Profile updated in the database."));
     } catch (error) {
       setSettingsError(getApiErrorMessage(error));
     }
@@ -222,13 +328,197 @@ export const Profile = () => {
     try {
       changePassword(values.currentPassword, values.nextPassword);
       passwordForm.reset();
-      setSettingsMessage("Password changed.");
+      setSettingsMessage(tr("profile.messages.passwordChanged", "Password changed."));
     } catch (error) {
       setSettingsError(
-        error instanceof Error ? error.message : "Unable to change password.",
+        error instanceof Error ? error.message : tr("profile.errors.changePassword", "Unable to change password."),
       );
     }
   };
+
+  const onLanguageChange = async (language: LanguagePreference) => {
+    setLanguageError("");
+    setLanguageMessage("");
+
+    try {
+      await updateUser({ languagePreference: language });
+      await i18n.changeLanguage(language);
+      setLanguageMessage(tr("profile.messages.languageSaved", "Language preference saved."));
+    } catch (error) {
+      setLanguageError(getApiErrorMessage(error));
+    }
+  };
+
+  const openCancelDialog = (booking: Booking) => {
+    setCancelError("");
+
+    if (cancellableStatuses.has(booking.status)) {
+      setBookingDialog({ type: "confirm-cancel", booking });
+      return;
+    }
+
+    if (booking.status === "Confirmed") {
+      setBookingDialog({ type: "cannot-cancel", booking });
+    }
+  };
+
+  const confirmCancelBooking = async () => {
+    if (bookingDialog?.type !== "confirm-cancel") {
+      return;
+    }
+
+    const bookingId = bookingDialog.booking.id;
+    if (!bookingId) {
+      setCancelError(tr("profile.bookings.cancelMissingId", "Unable to cancel this booking because the booking ID is missing."));
+      return;
+    }
+
+    setIsCancelling(true);
+    setCancelError("");
+
+    try {
+      const cancelledBooking = await cancelBooking(bookingId, user.email);
+      setBookings((current) =>
+        current.map((booking) =>
+          bookingKey(booking) === bookingKey(cancelledBooking)
+            ? cancelledBooking
+            : booking,
+        ),
+      );
+      await loadProfileData();
+      setPageMessage(tr("profile.bookings.cancelSuccess", "Booking cancelled successfully."));
+      setBookingDialog(null);
+    } catch (error) {
+      setCancelError(getApiErrorMessage(error));
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const renderBookingCard = (booking: Booking) => {
+    const report = booking.id ? reportsByBookingId.get(booking.id) : undefined;
+    const canShowCancel =
+      cancellableStatuses.has(booking.status) || booking.status === "Confirmed";
+
+    return (
+      <article
+        key={bookingKey(booking)}
+        className="grid gap-4 rounded-lg border border-slate-200 p-4 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-start"
+      >
+        <div>
+          <p className="text-xs font-bold uppercase text-slate-500">
+            {tr("profile.bookings.testName", "Test Name")}
+          </p>
+          <h3 className="mt-1 text-lg font-black text-thyro-navy">
+            {booking.testName}
+          </h3>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            {booking.category} | {formatPrice(booking.price)}
+          </p>
+          <p className="mt-3 text-xs font-bold uppercase text-slate-500">
+            {tr("profile.bookings.bookingId", "Booking ID")}
+          </p>
+          <p className="mt-1 break-all text-sm font-bold text-slate-700">
+            {valueOrFallback(booking.id)}
+          </p>
+        </div>
+
+        <div className="grid gap-3 text-sm">
+          <div>
+            <p className="text-xs font-bold uppercase text-slate-500">
+              {tr("profile.bookings.bookingDate", "Booking Date")}
+            </p>
+            <p className="mt-1 font-bold text-slate-700">
+              {formatBookingDate(booking.bookingDate)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase text-slate-500">
+              {tr("profile.bookings.preferredTimeSlot", "Preferred Time Slot")}
+            </p>
+            <p className="mt-1 font-bold text-slate-700">
+              {booking.preferredTimeSlot}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 text-sm">
+          <div>
+            <p className="text-xs font-bold uppercase text-slate-500">
+              {tr("profile.bookings.bookingMode", "Booking Mode")}
+            </p>
+            <p className="mt-1 font-bold text-slate-700">{booking.bookingType}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase text-slate-500">
+              {tr("profile.bookings.createdDate", "Created Date")}
+            </p>
+            <p className="mt-1 font-bold text-slate-700">
+              {formatDateTime(booking.createdAt)}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 lg:items-end">
+          <p className="text-xs font-bold uppercase text-slate-500">
+            {tr("profile.bookings.bookingStatus", "Booking Status")}
+          </p>
+          <span className="inline-flex min-h-9 items-center justify-center rounded-full bg-thyro-sky px-4 py-2 text-sm font-extrabold text-thyro-blue">
+            {booking.status}
+          </span>
+          {report?.reportUrl && (
+            <a
+              href={report.reportUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-thyro-green px-4 text-sm font-bold text-thyro-green transition hover:bg-thyro-mint"
+            >
+              <Download className="h-4 w-4" />
+              {tr("profile.bookings.downloadReport", "Download Report")}
+            </a>
+          )}
+          {canShowCancel && (
+            <button
+              type="button"
+              onClick={() => openCancelDialog(booking)}
+              className="inline-flex h-10 items-center justify-center rounded-full border border-thyro-red px-4 text-sm font-bold text-thyro-red transition hover:bg-red-50"
+            >
+              {tr("profile.bookings.cancelBooking", "Cancel Booking")}
+            </button>
+          )}
+        </div>
+      </article>
+    );
+  };
+
+  const renderBookingSection = (
+    title: string,
+    emptyTitle: string,
+    sectionBookings: Booking[],
+    showBookTestButton = false,
+  ) => (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <h3 className="text-xl font-black text-thyro-navy">{title}</h3>
+      <div className="mt-4">
+        {sectionBookings.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
+            <p className="text-sm font-bold text-thyro-navy">{emptyTitle}</p>
+            {showBookTestButton && (
+              <button
+                type="button"
+                onClick={() => navigate("/tests")}
+                className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-thyro-green px-5 text-sm font-bold text-white shadow-crisp transition hover:bg-emerald-700"
+              >
+                {tr("profile.bookings.bookTest", "Book Test")}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-4">{sectionBookings.map(renderBookingCard)}</div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <main className="bg-slate-50">
@@ -236,10 +526,14 @@ export const Profile = () => {
         <div className="mx-auto flex max-w-7xl flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <StaticLogo />
-            <h1 className="mt-6 text-4xl font-black text-thyro-navy">Profile</h1>
+            <h1 className="mt-6 text-4xl font-black text-thyro-navy">
+              {tr("profile.title", "Profile")}
+            </h1>
             <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-              Your personal information, bookings, reports, notifications, and
-              account settings are managed here.
+              {tr(
+                "profile.subtitle",
+                "Your personal information, bookings, reports, notifications, and account settings are managed here.",
+              )}
             </p>
           </div>
           <div className="grid h-20 w-20 place-items-center rounded-full bg-thyro-blue text-2xl font-black text-white shadow-soft">
@@ -266,10 +560,10 @@ export const Profile = () => {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase text-thyro-green">
-                  Section 1
+                  {tr("profile.sections.section1", "Section 1")}
                 </p>
                 <h2 className="text-2xl font-black text-thyro-navy">
-                  Personal Information
+                  {tr("profile.personal.title", "Personal Information")}
                 </h2>
               </div>
             </div>
@@ -289,6 +583,55 @@ export const Profile = () => {
           </section>
 
           <section
+            id="language-preference"
+            className="rounded-lg border border-slate-200 bg-white p-6 shadow-crisp"
+          >
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-lg bg-thyro-mint text-thyro-green">
+                <Languages className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-thyro-green">
+                  {tr("profile.sections.section2", "Section 2")}
+                </p>
+                <h2 className="text-2xl font-black text-thyro-navy">
+                  {tr("profile.language.title", "Language Preference")}
+                </h2>
+              </div>
+            </div>
+
+            <label className="mt-6 block max-w-md text-sm">
+              <span className="font-bold text-slate-700">
+                {tr("profile.language.selectLabel", "Preferred Language")}
+              </span>
+              <select
+                value={currentLanguage}
+                onChange={(event) =>
+                  void onLanguageChange(event.target.value as LanguagePreference)
+                }
+                className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 text-sm outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
+              >
+                {selectableLanguages.map((language) => (
+                  <option key={language.code} value={language.code}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {languageMessage && (
+              <p className="mt-4 rounded-md bg-thyro-mint px-4 py-3 text-sm font-bold text-thyro-green">
+                {languageMessage}
+              </p>
+            )}
+            {languageError && (
+              <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-thyro-red">
+                {languageError}
+              </p>
+            )}
+          </section>
+
+          <section
             id="bookings"
             className="rounded-lg border border-slate-200 bg-white p-6 shadow-crisp"
           >
@@ -298,69 +641,36 @@ export const Profile = () => {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase text-thyro-green">
-                  Section 2
+                  {tr("profile.sections.section3", "Section 3")}
                 </p>
-                <h2 className="text-2xl font-black text-thyro-navy">My Bookings</h2>
+                <h2 className="text-2xl font-black text-thyro-navy">
+                  {tr("profile.bookings.title", "My Bookings")}
+                </h2>
               </div>
             </div>
 
             <div className="mt-6">
               {apiLoading ? (
                 <p className="rounded-md bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
-                  Loading bookings...
+                  {tr("profile.bookings.loading", "Loading bookings...")}
                 </p>
               ) : bookingsError ? (
                 <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-thyro-red">
                   {bookingsError}
                 </p>
-              ) : bookings.length === 0 ? (
-                <EmptyState
-                  icon={ClipboardList}
-                  title="No bookings available"
-                  text="Your booked tests will appear here after you submit a booking."
-                />
               ) : (
-                <div className="grid gap-4">
-                  {bookings.map((booking) => (
-                    <article
-                      key={bookingKey(booking)}
-                      className="grid gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-[1.3fr_1fr_1fr_auto] sm:items-center"
-                    >
-                      <div>
-                        <p className="text-xs font-bold uppercase text-slate-500">
-                          Test Name
-                        </p>
-                        <h3 className="mt-1 text-lg font-black text-thyro-navy">
-                          {booking.testName}
-                        </h3>
-                        <p className="mt-1 text-sm font-semibold text-slate-500">
-                          {booking.category} | {formatPrice(booking.price)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase text-slate-500">
-                          Booking Date
-                        </p>
-                        <p className="mt-1 font-bold text-slate-700">
-                          {formatBookingDate(booking.bookingDate)}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {booking.preferredTimeSlot}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase text-slate-500">
-                          Booking Type
-                        </p>
-                        <p className="mt-1 font-bold text-slate-700">
-                          {booking.bookingType}
-                        </p>
-                      </div>
-                      <span className="inline-flex h-9 items-center justify-center rounded-full bg-thyro-sky px-4 text-sm font-extrabold text-thyro-blue">
-                        {booking.status}
-                      </span>
-                    </article>
-                  ))}
+                <div className="grid gap-5">
+                  {renderBookingSection(
+                    tr("profile.bookings.upcoming", "Upcoming Bookings"),
+                    tr("profile.bookings.noUpcoming", "No upcoming bookings found."),
+                    upcomingBookings,
+                    true,
+                  )}
+                  {renderBookingSection(
+                    tr("profile.bookings.previous", "Previous Bookings"),
+                    tr("profile.bookings.noPrevious", "No previous bookings available."),
+                    previousBookings,
+                  )}
                 </div>
               )}
             </div>
@@ -376,22 +686,27 @@ export const Profile = () => {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase text-thyro-green">
-                  Section 3
+                  {tr("profile.sections.section4", "Section 4")}
                 </p>
-                <h2 className="text-2xl font-black text-thyro-navy">My Reports</h2>
+                <h2 className="text-2xl font-black text-thyro-navy">
+                  {tr("profile.reports.title", "My Reports")}
+                </h2>
               </div>
             </div>
             <div className="mt-6">
               {apiLoading ? (
                 <p className="rounded-md bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
-                  Loading reports...
+                  {tr("profile.reports.loading", "Loading reports...")}
                 </p>
               ) : reportsError ? (
                 <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-thyro-red">
                   {reportsError}
                 </p>
               ) : reports.length === 0 ? (
-                <EmptyState icon={FileText} title="No reports available" />
+                <EmptyState
+                  icon={FileText}
+                  title={tr("profile.reports.empty", "No reports available")}
+                />
               ) : (
                 <div className="grid gap-4">
                   {reports.map((report) => (
@@ -401,7 +716,7 @@ export const Profile = () => {
                     >
                       <div>
                         <p className="text-xs font-bold uppercase text-slate-500">
-                          Test Name
+                          {tr("profile.bookings.testName", "Test Name")}
                         </p>
                         <h3 className="mt-1 text-lg font-black text-thyro-navy">
                           {report.testName}
@@ -414,7 +729,7 @@ export const Profile = () => {
                       </div>
                       <div>
                         <p className="text-xs font-bold uppercase text-slate-500">
-                          Generated
+                          {tr("profile.reports.generated", "Generated")}
                         </p>
                         <p className="mt-1 font-bold text-slate-700">
                           {formatDateTime(report.createdAt)}
@@ -431,7 +746,7 @@ export const Profile = () => {
                             rel="noreferrer"
                             className="text-sm font-bold text-thyro-green hover:text-emerald-700"
                           >
-                            View report
+                            {tr("profile.reports.viewReport", "View report")}
                           </a>
                         )}
                       </div>
@@ -452,22 +767,27 @@ export const Profile = () => {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase text-thyro-green">
-                  Section 4
+                  {tr("profile.sections.section5", "Section 5")}
                 </p>
-                <h2 className="text-2xl font-black text-thyro-navy">Notifications</h2>
+                <h2 className="text-2xl font-black text-thyro-navy">
+                  {tr("profile.notifications.title", "Notifications")}
+                </h2>
               </div>
             </div>
             <div className="mt-6">
               {apiLoading ? (
                 <p className="rounded-md bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
-                  Loading notifications...
+                  {tr("profile.notifications.loading", "Loading notifications...")}
                 </p>
               ) : notificationsError ? (
                 <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-thyro-red">
                   {notificationsError}
                 </p>
               ) : notifications.length === 0 ? (
-                <EmptyState icon={Bell} title="No notifications available" />
+                <EmptyState
+                  icon={Bell}
+                  title={tr("profile.notifications.empty", "No notifications available")}
+                />
               ) : (
                 <div className="grid gap-4">
                   {notifications.map((notification) => (
@@ -494,7 +814,9 @@ export const Profile = () => {
                               : "bg-thyro-mint text-thyro-green"
                           }`}
                         >
-                          {notification.isRead ? "Read" : "Unread"}
+                          {notification.isRead
+                            ? tr("profile.notifications.read", "Read")
+                            : tr("profile.notifications.unread", "Unread")}
                         </span>
                       </div>
                     </article>
@@ -514,10 +836,10 @@ export const Profile = () => {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase text-thyro-green">
-                  Section 5
+                  {tr("profile.sections.section6", "Section 6")}
                 </p>
                 <h2 className="text-2xl font-black text-thyro-navy">
-                  Account Settings
+                  {tr("profile.settings.title", "Account Settings")}
                 </h2>
               </div>
             </div>
@@ -536,7 +858,7 @@ export const Profile = () => {
                     : "border border-slate-200 text-slate-700 hover:bg-thyro-sky"
                 }`}
               >
-                Edit Profile
+                {tr("profile.settings.editProfile", "Edit Profile")}
               </button>
               <button
                 type="button"
@@ -552,7 +874,7 @@ export const Profile = () => {
                 }`}
               >
                 <LockKeyhole className="h-4 w-4" />
-                Change Password
+                {tr("profile.settings.changePassword", "Change Password")}
               </button>
             </div>
 
@@ -573,7 +895,9 @@ export const Profile = () => {
                 className="mt-6 grid gap-4 sm:grid-cols-2"
               >
                 <label className="block text-sm">
-                  <span className="font-bold text-slate-700">Full Name</span>
+                  <span className="font-bold text-slate-700">
+                    {tr("profile.personal.fullName", "Full Name")}
+                  </span>
                   <input
                     className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
                     {...editForm.register("fullName")}
@@ -586,7 +910,9 @@ export const Profile = () => {
                 </label>
 
                 <label className="block text-sm">
-                  <span className="font-bold text-slate-700">Phone Number</span>
+                  <span className="font-bold text-slate-700">
+                    {tr("profile.personal.phoneNumber", "Phone Number")}
+                  </span>
                   <input
                     className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
                     {...editForm.register("phone")}
@@ -604,7 +930,9 @@ export const Profile = () => {
                     disabled={editForm.formState.isSubmitting}
                     className="inline-flex h-12 items-center justify-center rounded-full bg-thyro-green px-6 text-sm font-bold text-white shadow-crisp transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {editForm.formState.isSubmitting ? "Saving..." : "Save Changes"}
+                    {editForm.formState.isSubmitting
+                      ? tr("profile.settings.saving", "Saving...")
+                      : tr("profile.settings.saveChanges", "Save Changes")}
                   </button>
                 </div>
               </form>
@@ -614,7 +942,9 @@ export const Profile = () => {
                 className="mt-6 grid gap-4 sm:grid-cols-3"
               >
                 <label className="block text-sm">
-                  <span className="font-bold text-slate-700">Current Password</span>
+                  <span className="font-bold text-slate-700">
+                    {tr("profile.settings.currentPassword", "Current Password")}
+                  </span>
                   <input
                     type="password"
                     className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
@@ -628,7 +958,9 @@ export const Profile = () => {
                 </label>
 
                 <label className="block text-sm">
-                  <span className="font-bold text-slate-700">New Password</span>
+                  <span className="font-bold text-slate-700">
+                    {tr("profile.settings.newPassword", "New Password")}
+                  </span>
                   <input
                     type="password"
                     className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
@@ -642,7 +974,9 @@ export const Profile = () => {
                 </label>
 
                 <label className="block text-sm">
-                  <span className="font-bold text-slate-700">Confirm Password</span>
+                  <span className="font-bold text-slate-700">
+                    {tr("profile.settings.confirmPassword", "Confirm Password")}
+                  </span>
                   <input
                     type="password"
                     className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
@@ -660,7 +994,7 @@ export const Profile = () => {
                     type="submit"
                     className="inline-flex h-12 items-center justify-center rounded-full bg-thyro-green px-6 text-sm font-bold text-white shadow-crisp transition hover:bg-emerald-700"
                   >
-                    Update Password
+                    {tr("profile.settings.updatePassword", "Update Password")}
                   </button>
                 </div>
               </form>
@@ -668,6 +1002,92 @@ export const Profile = () => {
           </section>
         </div>
       </section>
+
+      {bookingDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-thyro-ink/55 px-4 py-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-soft">
+            {bookingDialog.type === "confirm-cancel" ? (
+              <>
+                <h2 className="text-2xl font-black text-thyro-navy">
+                  {tr("profile.dialogs.cancelTitle", "Cancel Booking")}
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {tr(
+                    "profile.dialogs.cancelMessage",
+                    "Are you sure you want to cancel this booking?",
+                  )}
+                </p>
+                {cancelError && (
+                  <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-thyro-red">
+                    {cancelError}
+                  </p>
+                )}
+                <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={isCancelling}
+                    onClick={() => setBookingDialog(null)}
+                    className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {tr("profile.dialogs.no", "No")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isCancelling}
+                    onClick={() => void confirmCancelBooking()}
+                    className="inline-flex h-11 items-center justify-center rounded-full bg-thyro-red px-5 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isCancelling
+                      ? tr("profile.dialogs.cancelling", "Cancelling...")
+                      : tr("profile.dialogs.yesCancel", "Yes, Cancel")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-black text-thyro-navy">
+                  {tr("profile.dialogs.cannotCancelTitle", "Cannot Cancel Booking")}
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {tr(
+                    "profile.dialogs.cannotCancelMessage",
+                    "This booking has already been confirmed by THYRO LABORATORIES. Once a booking is confirmed, it cannot be cancelled online. Please contact the laboratory for further assistance.",
+                  )}
+                </p>
+                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                  <a
+                    href={contactLinks.call}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-thyro-red px-4 text-sm font-bold text-white transition hover:bg-red-700"
+                  >
+                    <Phone className="h-4 w-4" />
+                    {tr("profile.dialogs.call", "Call Laboratory")}
+                  </a>
+                  <a
+                    href={contactLinks.whatsapp}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-thyro-green px-4 text-sm font-bold text-white transition hover:bg-emerald-700"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    {tr("profile.dialogs.whatsapp", "WhatsApp Laboratory")}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setBookingDialog(null)}
+                    className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    {tr("profile.dialogs.close", "Close")}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 };

@@ -3,6 +3,7 @@ import type {
   Booking,
   BookingStatus,
   BookingType,
+  LanguagePreference,
   Notification,
   Report,
 } from "../types";
@@ -38,6 +39,7 @@ type BackendBooking = {
   booking_date: string;
   preferred_time_slot: string;
   status: BookingStatus;
+  cancelled_at?: string | null;
   created_at: string;
   updated_at: string | null;
 };
@@ -70,6 +72,7 @@ type BackendProfile = {
   full_name: string;
   phone: string;
   email: string;
+  language_preference?: LanguagePreference | null;
   created_at: string;
 };
 
@@ -81,6 +84,7 @@ export type SyncProfilePayload = {
   gender?: string | null;
   address?: string | null;
   profilePhoto?: string | null;
+  languagePreference?: LanguagePreference | null;
 };
 
 export type CreateBookingPayload = {
@@ -129,6 +133,7 @@ const mapBooking = (booking: BackendBooking): Booking => ({
   bookingDate: booking.booking_date,
   preferredTimeSlot: booking.preferred_time_slot,
   status: booking.status,
+  cancelledAt: booking.cancelled_at,
   createdAt: booking.created_at,
   updatedAt: booking.updated_at,
 });
@@ -237,6 +242,15 @@ export const updateBookingStatus = async (
   const response = await apiClient.put<ApiSuccess<{ booking: BackendBooking }>>(
     `/bookings/${bookingId}`,
     { status },
+  );
+
+  return mapBooking(response.data.data.booking);
+};
+
+export const cancelBooking = async (bookingId: string, userEmail: string) => {
+  const response = await apiClient.patch<ApiSuccess<{ booking: BackendBooking }>>(
+    `/bookings/${bookingId}/cancel`,
+    { userEmail },
   );
 
   return mapBooking(response.data.data.booking);

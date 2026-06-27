@@ -8,19 +8,51 @@ type Client = SupabaseClient<Database>;
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
-const toProfileValues = (profile: SyncProfileInput) => ({
-  full_name: profile.fullName,
-  phone: profile.phone,
-  email: profile.email.trim().toLowerCase()
-});
+let supportsProfileLanguagePreference: boolean | null = null;
+
+const hasProfileLanguagePreference = async (client: Client) => {
+  if (supportsProfileLanguagePreference !== null) {
+    return supportsProfileLanguagePreference;
+  }
+
+  const { error } = await client
+    .from("profiles")
+    .select("language_preference")
+    .limit(1);
+
+  supportsProfileLanguagePreference = !error;
+
+  return supportsProfileLanguagePreference;
+};
+
+const toProfileValues = (
+  profile: SyncProfileInput,
+  includeLanguagePreference: boolean
+) => {
+  const values: Record<string, string | null> = {
+    full_name: profile.fullName,
+    phone: profile.phone,
+    email: profile.email.trim().toLowerCase()
+  };
+
+  if (includeLanguagePreference && profile.languagePreference) {
+    values.language_preference = profile.languagePreference;
+  }
+
+  return values;
+};
 
 export const profilesService = {
   async sync(client: Client, payload: SyncProfileInput) {
-    const profileValues = toProfileValues(payload);
+    const normalizedEmail = payload.email.trim().toLowerCase();
+    const profileValues = toProfileValues(
+      payload,
+      await hasProfileLanguagePreference(client)
+    );
     const { data: existingProfile, error: lookupError } = await client
       .from("profiles")
       .select("id")
-      .eq("email", profileValues.email)
+      .eq("email", normalizedEmail)
       .maybeSingle();
 
     if (lookupError) {
@@ -30,13 +62,13 @@ export const profilesService = {
     const result = existingProfile
       ? await client
           .from("profiles")
-          .update(profileValues satisfies ProfileUpdate)
+          .update(profileValues as ProfileUpdate)
           .eq("id", existingProfile.id)
           .select("*")
           .single()
       : await client
           .from("profiles")
-          .insert(profileValues satisfies ProfileInsert)
+          .insert(profileValues as ProfileInsert)
           .select("*")
           .single();
 

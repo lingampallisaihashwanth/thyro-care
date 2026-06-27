@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Mail, Send } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { StaticLogo } from "../components/Logo";
@@ -18,8 +19,11 @@ const forgotPasswordSchema = z.object({
 type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
 export const ForgotPassword = () => {
+  const { t } = useTranslation();
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
   const {
     register,
     handleSubmit,
@@ -38,11 +42,16 @@ export const ForgotPassword = () => {
     try {
       await sendPasswordResetEmail(values.email);
       setSuccessMessage(
-        "A password reset link has been sent to your registered email address.",
+        tr(
+          "forgotPassword.success",
+          "A password reset link has been sent to your registered email address.",
+        ),
       );
     } catch (error) {
       setFormError(
-        error instanceof Error ? error.message : "Unable to send password reset email.",
+        error instanceof Error
+          ? error.message
+          : tr("forgotPassword.error", "Unable to send password reset email."),
       );
     }
   };
@@ -53,11 +62,13 @@ export const ForgotPassword = () => {
         <div>
           <StaticLogo />
           <h1 className="mt-8 text-4xl font-black text-thyro-navy">
-            Forgot Password
+            {tr("forgotPassword.title", "Forgot Password")}
           </h1>
           <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
-            Enter your registered email address and we will send a secure reset
-            link through Supabase Authentication.
+            {tr(
+              "forgotPassword.subtitle",
+              "Enter your registered email address and we will send a secure reset link through Supabase Authentication.",
+            )}
           </p>
         </div>
 
@@ -69,13 +80,13 @@ export const ForgotPassword = () => {
             <Send className="h-6 w-6" />
           </div>
           <h2 className="mt-5 text-2xl font-black text-thyro-navy">
-            Reset your password
+            {tr("forgotPassword.heading", "Reset your password")}
           </h2>
 
           <label className="mt-6 block text-sm">
             <span className="flex items-center gap-2 font-bold text-slate-700">
               <Mail className="h-4 w-4 text-thyro-green" />
-              Email
+              {tr("profile.personal.email", "Email")}
             </span>
             <input
               type="email"
@@ -108,13 +119,15 @@ export const ForgotPassword = () => {
             className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-thyro-blue px-6 text-sm font-bold text-white shadow-crisp transition hover:bg-thyro-navy disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}
-            {isSubmitting ? "Sending..." : "Send reset link"}
+            {isSubmitting
+              ? tr("forgotPassword.sending", "Sending...")
+              : tr("forgotPassword.send", "Send reset link")}
           </button>
 
           <p className="mt-5 text-center text-sm text-slate-600">
-            Remembered your password?{" "}
+            {tr("forgotPassword.remembered", "Remembered your password?")}{" "}
             <Link to="/login" className="font-bold text-thyro-blue">
-              Login
+              {tr("nav.login", "Login")}
             </Link>
           </p>
         </form>

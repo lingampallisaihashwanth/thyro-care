@@ -9,10 +9,19 @@ const bookingTypeValues = [
 
 const bookingStatusValues = [
   "Requested",
+  "Pending",
   "Confirmed",
+  "Sample Collection Scheduled",
   "Sample Collected",
+  "Processing",
+  "Report Ready",
   "Completed",
   "Cancelled"
+] as const satisfies readonly BookingStatus[];
+
+export const cancellableBookingStatusValues = [
+  "Requested",
+  "Pending"
 ] as const satisfies readonly BookingStatus[];
 
 const dateSchema = z
@@ -48,6 +57,11 @@ export const bookingsQuerySchema = z.object({
   status: z.enum(bookingStatusValues).optional()
 });
 
+export const cancelBookingSchema = z.object({
+  userEmail: z.string().email().optional()
+});
+
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 export type UpdateBookingInput = z.infer<typeof updateBookingSchema>;
 export type BookingsQueryInput = z.infer<typeof bookingsQuerySchema>;
+export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;

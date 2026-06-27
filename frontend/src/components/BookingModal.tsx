@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarClock, LogIn, MapPin, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { formatPrice } from "../data/tests";
@@ -45,8 +46,13 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
+  const translateBookingType = (type: BookingType) =>
+    tr(`booking.types.${type}`, type);
   const {
     register,
     handleSubmit,
@@ -104,7 +110,7 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
         status: "Requested",
       });
 
-      setSubmitSuccess("Booking submitted successfully.");
+      setSubmitSuccess(tr("booking.messages.submitted", "Booking submitted successfully."));
       onBooked(booking);
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
@@ -121,19 +127,21 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
       <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-soft">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div>
-            <p className="text-xs font-bold uppercase text-thyro-green">Selected Test</p>
+            <p className="text-xs font-bold uppercase text-thyro-green">
+              {tr("booking.selectedTest", "Selected Test")}
+            </p>
             <h2 id="booking-title" className="mt-1 text-2xl font-extrabold text-thyro-navy">
               {test.name}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              {test.category} | {formatPrice(test.price)} | Report: {test.reportTime}
+              {test.category} | {formatPrice(test.price)} | {tr("booking.report", "Report")}: {test.reportTime}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:border-thyro-red hover:text-thyro-red"
-            aria-label="Close booking form"
+            aria-label={tr("booking.closeForm", "Close booking form")}
           >
             <X className="h-5 w-5" />
           </button>
@@ -148,11 +156,13 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-thyro-navy">
-                    Login or register to continue booking.
+                    {tr("booking.authRequiredTitle", "Login or register to continue booking.")}
                   </h3>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Booking details are auto-filled from your registered account, so
-                    patient contact information is not entered again on this form.
+                    {tr(
+                      "booking.authRequiredText",
+                      "Booking details are auto-filled from your registered account, so patient contact information is not entered again on this form.",
+                    )}
                   </p>
                 </div>
               </div>
@@ -161,13 +171,13 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
                   to="/login"
                   className="inline-flex h-11 items-center justify-center rounded-full bg-thyro-blue px-5 text-sm font-bold text-white transition hover:bg-thyro-navy"
                 >
-                  Login
+                  {tr("nav.login", "Login")}
                 </Link>
                 <Link
                   to="/register"
                   className="inline-flex h-11 items-center justify-center rounded-full border border-thyro-green px-5 text-sm font-bold text-thyro-green transition hover:bg-thyro-mint"
                 >
-                  Register
+                  {tr("nav.register", "Register")}
                 </Link>
               </div>
             </div>
@@ -178,11 +188,13 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
               <div className="sm:col-span-3">
                 <p className="flex items-center gap-2 text-sm font-bold text-thyro-navy">
                   <UserRound className="h-4 w-4 text-thyro-green" />
-                  Account Details
+                  {tr("booking.accountDetails", "Account Details")}
                 </p>
               </div>
               <label className="block text-sm">
-                <span className="font-semibold text-slate-600">Full Name</span>
+                <span className="font-semibold text-slate-600">
+                  {tr("profile.personal.fullName", "Full Name")}
+                </span>
                 <input
                   value={user.fullName}
                   readOnly
@@ -190,7 +202,9 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
                 />
               </label>
               <label className="block text-sm">
-                <span className="font-semibold text-slate-600">Phone Number</span>
+                <span className="font-semibold text-slate-600">
+                  {tr("profile.personal.phoneNumber", "Phone Number")}
+                </span>
                 <input
                   value={user.phone}
                   readOnly
@@ -198,7 +212,9 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
                 />
               </label>
               <label className="block text-sm">
-                <span className="font-semibold text-slate-600">Email</span>
+                <span className="font-semibold text-slate-600">
+                  {tr("profile.personal.email", "Email")}
+                </span>
                 <input
                   value={user.email}
                   readOnly
@@ -210,7 +226,7 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
             <div>
               <p className="mb-3 flex items-center gap-2 text-sm font-bold text-thyro-navy">
                 <MapPin className="h-4 w-4 text-thyro-green" />
-                Booking Type
+                {tr("booking.bookingType", "Booking Type")}
               </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {bookingTypes.map((type) => (
@@ -224,7 +240,7 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
                       className="h-4 w-4 accent-thyro-green"
                       {...register("bookingType")}
                     />
-                    {type}
+                    {translateBookingType(type)}
                   </label>
                 ))}
               </div>
@@ -234,7 +250,7 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
               <label className="block text-sm">
                 <span className="flex items-center gap-2 font-bold text-thyro-navy">
                   <CalendarClock className="h-4 w-4 text-thyro-green" />
-                  Preferred Date
+                  {tr("booking.preferredDate", "Preferred Date")}
                 </span>
                 <input
                   type="date"
@@ -250,12 +266,14 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
               </label>
 
               <label className="block text-sm">
-                <span className="font-bold text-thyro-navy">Preferred Time Slot</span>
+                <span className="font-bold text-thyro-navy">
+                  {tr("booking.preferredTimeSlot", "Preferred Time Slot")}
+                </span>
                 <select
                   className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 text-slate-700 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
                   {...register("preferredTimeSlot")}
                 >
-                  <option value="">Select time slot</option>
+                  <option value="">{tr("booking.selectTimeSlot", "Select time slot")}</option>
                   {timeSlots.map((slot) => (
                     <option key={slot} value={slot}>
                       {slot}
@@ -290,14 +308,16 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
                 onClick={onClose}
                 className="inline-flex h-12 items-center justify-center rounded-full border border-slate-200 px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
               >
-                Cancel
+                {tr("common.cancel", "Cancel")}
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
                 className="inline-flex h-12 items-center justify-center rounded-full bg-thyro-green px-6 text-sm font-bold text-white shadow-crisp transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isSubmitting ? "Booking..." : "Book Test"}
+                {isSubmitting
+                  ? tr("booking.submitting", "Booking...")
+                  : tr("common.bookTest", "Book Test")}
               </button>
             </div>
           </form>

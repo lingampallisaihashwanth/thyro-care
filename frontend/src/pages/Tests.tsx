@@ -1,5 +1,6 @@
 import { ArrowDownAZ, ArrowUpAZ, Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { BookingModal } from "../components/BookingModal";
 import { formatPrice, labTests, testCategories } from "../data/tests";
@@ -9,11 +10,14 @@ type CategoryFilter = "All" | TestCategory;
 type SortMode = "featured" | "priceLow" | "priceHigh";
 
 export const Tests = () => {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("All");
   const [sortMode, setSortMode] = useState<SortMode>("featured");
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const navigate = useNavigate();
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
 
   const filteredTests = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -54,7 +58,7 @@ export const Tests = () => {
     setSelectedTest(null);
     navigate("/profile", {
       state: {
-        bookingSuccess: "Booking submitted successfully.",
+        bookingSuccess: tr("booking.messages.submitted", "Booking submitted successfully."),
         booking,
       },
     });
@@ -65,14 +69,16 @@ export const Tests = () => {
       <section className="bg-thyro-sky px-4 py-14 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <p className="text-sm font-bold uppercase text-thyro-green">
-            Laboratory Tests
+            {tr("tests.eyebrow", "Laboratory Tests")}
           </p>
           <h1 className="mt-3 max-w-3xl text-4xl font-black text-thyro-navy">
-            Search, filter, and book your laboratory test.
+            {tr("tests.heading", "Search, filter, and book your laboratory test.")}
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-            Select a test first. The booking form opens only after you choose Book
-            Test.
+            {tr(
+              "tests.subheading",
+              "Select a test first. The booking form opens only after you choose Book Test.",
+            )}
           </p>
         </div>
       </section>
@@ -85,7 +91,7 @@ export const Tests = () => {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search tests"
+                placeholder={tr("tests.searchPlaceholder", "Search tests")}
                 className="h-12 w-full rounded-md border border-slate-200 pl-10 pr-3 text-sm outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
               />
             </label>
@@ -97,7 +103,7 @@ export const Tests = () => {
                 onChange={(event) => setCategory(event.target.value as CategoryFilter)}
                 className="h-12 w-full rounded-md border border-slate-200 pl-10 pr-3 text-sm outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
               >
-                <option value="All">All Categories</option>
+                <option value="All">{tr("tests.allCategories", "All Categories")}</option>
                 {testCategories.map((item) => (
                   <option key={item} value={item}>
                     {item}
@@ -117,9 +123,9 @@ export const Tests = () => {
                 onChange={(event) => setSortMode(event.target.value as SortMode)}
                 className="h-12 w-full rounded-md border border-slate-200 pl-10 pr-3 text-sm outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
               >
-                <option value="featured">Default Order</option>
-                <option value="priceLow">Price: Low to High</option>
-                <option value="priceHigh">Price: High to Low</option>
+                <option value="featured">{tr("tests.sort.default", "Default Order")}</option>
+                <option value="priceLow">{tr("tests.sort.lowHigh", "Price: Low to High")}</option>
+                <option value="priceHigh">{tr("tests.sort.highLow", "Price: High to Low")}</option>
               </select>
             </label>
           </div>
@@ -147,7 +153,9 @@ export const Tests = () => {
                   {test.description}
                 </p>
                 <div className="mt-5 rounded-lg bg-slate-50 p-3 text-sm">
-                  <span className="font-bold text-slate-500">Report Time: </span>
+                  <span className="font-bold text-slate-500">
+                    {tr("tests.reportTime", "Report Time: ")}
+                  </span>
                   <span className="font-bold text-thyro-navy">{test.reportTime}</span>
                 </div>
                 <button
@@ -155,7 +163,7 @@ export const Tests = () => {
                   onClick={() => setSelectedTest(test)}
                   className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-thyro-green px-5 text-sm font-bold text-white shadow-crisp transition hover:bg-emerald-700"
                 >
-                  Book Test
+                  {tr("common.bookTest", "Book Test")}
                 </button>
               </article>
             ))}
@@ -163,9 +171,11 @@ export const Tests = () => {
 
           {filteredTests.length === 0 && (
             <div className="mt-8 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-              <p className="font-bold text-thyro-navy">No tests found</p>
+              <p className="font-bold text-thyro-navy">
+                {tr("tests.emptyTitle", "No tests found")}
+              </p>
               <p className="mt-1 text-sm text-slate-500">
-                Try a different search or category filter.
+                {tr("tests.emptyText", "Try a different search or category filter.")}
               </p>
             </div>
           )}

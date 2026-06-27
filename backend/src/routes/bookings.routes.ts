@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  cancelBooking,
   createBooking,
   deleteBooking,
   getBookingById,
@@ -10,6 +11,7 @@ import { authenticateUnlessDevelopment } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {
   bookingsQuerySchema,
+  cancelBookingSchema,
   createBookingSchema,
   updateBookingSchema
 } from "../validators/bookings.validators";
@@ -23,6 +25,12 @@ router
   .route("/")
   .post(validate({ body: createBookingSchema }), createBooking)
   .get(validate({ query: bookingsQuerySchema }), getBookings);
+
+router.patch(
+  "/:id/cancel",
+  validate({ params: idParamSchema, body: cancelBookingSchema }),
+  cancelBooking
+);
 
 router
   .route("/:id")

@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LockKeyhole, LogIn, Mail } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { StaticLogo } from "../components/Logo";
@@ -24,14 +25,20 @@ type LocationState = {
 
 export const Login = () => {
   const { user, loginUser } = useAuth();
+  const { t } = useTranslation();
   const [formError, setFormError] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState | null;
   const from = state?.from?.pathname || "/profile";
   const passwordResetMessage = state?.passwordReset
-    ? "Your password has been reset successfully. Please login with your new password."
+    ? (t("login.passwordResetSuccess", {
+        defaultValue:
+          "Your password has been reset successfully. Please login with your new password.",
+      }) as string)
     : "";
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
   const {
     register,
     handleSubmit,
@@ -55,7 +62,7 @@ export const Login = () => {
       await loginUser(values.email, values.password);
       navigate(from, { replace: true });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Unable to login.");
+      setFormError(error instanceof Error ? error.message : tr("login.error", "Unable to login."));
     }
   };
 
@@ -64,10 +71,14 @@ export const Login = () => {
       <section className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[0.9fr_1fr] lg:items-center">
         <div>
           <StaticLogo />
-          <h1 className="mt-8 text-4xl font-black text-thyro-navy">Login</h1>
+          <h1 className="mt-8 text-4xl font-black text-thyro-navy">
+            {tr("nav.login", "Login")}
+          </h1>
           <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
-            Access your profile to view personal information, bookings, reports,
-            notifications, and account settings.
+            {tr(
+              "login.subtitle",
+              "Access your profile to view personal information, bookings, reports, notifications, and account settings.",
+            )}
           </p>
         </div>
 
@@ -79,13 +90,13 @@ export const Login = () => {
             <LogIn className="h-6 w-6" />
           </div>
           <h2 className="mt-5 text-2xl font-black text-thyro-navy">
-            Welcome back
+            {tr("login.heading", "Welcome back")}
           </h2>
 
           <label className="mt-6 block text-sm">
             <span className="flex items-center gap-2 font-bold text-slate-700">
               <Mail className="h-4 w-4 text-thyro-green" />
-              Email
+              {tr("profile.personal.email", "Email")}
             </span>
             <input
               type="email"
@@ -102,7 +113,7 @@ export const Login = () => {
           <label className="mt-4 block text-sm">
             <span className="flex items-center gap-2 font-bold text-slate-700">
               <LockKeyhole className="h-4 w-4 text-thyro-green" />
-              Password
+              {tr("login.password", "Password")}
             </span>
             <PasswordInput autoComplete="current-password" {...register("password")} />
             {errors.password && (
@@ -117,7 +128,7 @@ export const Login = () => {
               to="/forgot-password"
               className="text-sm font-bold text-thyro-blue transition hover:text-thyro-navy"
             >
-              Forgot Password?
+              {tr("login.forgotPassword", "Forgot Password?")}
             </Link>
           </div>
 
@@ -138,13 +149,13 @@ export const Login = () => {
             disabled={isSubmitting}
             className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full bg-thyro-blue px-6 text-sm font-bold text-white shadow-crisp transition hover:bg-thyro-navy disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isSubmitting ? "Logging in..." : "Login"}
+            {isSubmitting ? tr("login.submitting", "Logging in...") : tr("nav.login", "Login")}
           </button>
 
           <p className="mt-5 text-center text-sm text-slate-600">
-            New to THYRO LABORATORIES?{" "}
+            {tr("login.newUser", "New to THYRO LABORATORIES?")}{" "}
             <Link to="/register" className="font-bold text-thyro-green">
-              Register
+              {tr("nav.register", "Register")}
             </Link>
           </p>
         </form>

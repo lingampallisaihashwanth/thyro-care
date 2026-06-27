@@ -63,6 +63,15 @@ export const updateBooking = asyncHandler(async (req: Request, res: Response) =>
   });
 });
 
+export const cancelBooking = asyncHandler(async (req: Request, res: Response) => {
+  const booking = await bookingsService.cancel(getClient(req), req.params.id, req.body);
+
+  res.status(200).json({
+    status: "success",
+    data: { booking }
+  });
+});
+
 export const deleteBooking = asyncHandler(async (req: Request, res: Response) => {
   await bookingsService.delete(getClient(req), req.params.id);
 

@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, MapPin, MessageCircle, Phone, Send } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
 const contactSchema = z.object({
@@ -14,7 +15,10 @@ const contactSchema = z.object({
 type ContactFormValues = z.infer<typeof contactSchema>;
 
 export const Contact = () => {
+  const { t } = useTranslation();
   const [submitted, setSubmitted] = useState(false);
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
   const {
     register,
     handleSubmit,
@@ -39,13 +43,17 @@ export const Contact = () => {
     <main className="bg-white">
       <section className="bg-thyro-sky px-4 py-14 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <p className="text-sm font-bold uppercase text-thyro-green">Contact</p>
+          <p className="text-sm font-bold uppercase text-thyro-green">
+            {tr("contact.eyebrow", "Contact")}
+          </p>
           <h1 className="mt-3 max-w-3xl text-4xl font-black text-thyro-navy">
             THYRO LABORATORIES
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-            Opposite Abhaya Hospital, Doctors Colony, Miryalaguda, Telangana -
-            508207
+            {tr(
+              "contact.address",
+              "Opposite Abhaya Hospital, Doctors Colony, Miryalaguda, Telangana - 508207",
+            )}
           </p>
         </div>
       </section>
@@ -58,11 +66,13 @@ export const Contact = () => {
                 <MapPin className="h-6 w-6" />
               </div>
               <h2 className="mt-5 text-xl font-extrabold text-thyro-navy">
-                Visit Laboratory
+                {tr("contact.visitTitle", "Visit Laboratory")}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                Opposite Abhaya Hospital, Doctors Colony, Miryalaguda, Telangana -
-                508207
+                {tr(
+                  "contact.address",
+                  "Opposite Abhaya Hospital, Doctors Colony, Miryalaguda, Telangana - 508207",
+                )}
               </p>
             </div>
 
@@ -72,7 +82,7 @@ export const Contact = () => {
                 className="flex min-h-16 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-thyro-navy shadow-crisp transition hover:border-thyro-red hover:text-thyro-red"
               >
                 <Phone className="h-5 w-5" />
-                Call
+                {tr("contact.call", "Call")}
               </a>
               <a
                 href="https://wa.me/919985931929"
@@ -81,19 +91,21 @@ export const Contact = () => {
                 className="flex min-h-16 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-thyro-navy shadow-crisp transition hover:border-thyro-green hover:text-thyro-green"
               >
                 <MessageCircle className="h-5 w-5" />
-                WhatsApp
+                {tr("common.whatsapp", "WhatsApp")}
               </a>
               <a
                 href="mailto:thyrolaboratories99@gmail.com"
                 className="flex min-h-16 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-thyro-navy shadow-crisp transition hover:border-thyro-blue hover:text-thyro-blue"
               >
                 <Mail className="h-5 w-5" />
-                Email
+                {tr("profile.personal.email", "Email")}
               </a>
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-              <h2 className="font-extrabold text-thyro-navy">Phone Numbers</h2>
+              <h2 className="font-extrabold text-thyro-navy">
+                {tr("contact.phoneNumbers", "Phone Numbers")}
+              </h2>
               <p className="mt-2 text-sm leading-7 text-slate-600">
                 9985931929
                 <br />
@@ -101,7 +113,9 @@ export const Contact = () => {
                 <br />
                 9010855999
               </p>
-              <h2 className="mt-5 font-extrabold text-thyro-navy">Email</h2>
+              <h2 className="mt-5 font-extrabold text-thyro-navy">
+                {tr("profile.personal.email", "Email")}
+              </h2>
               <p className="mt-2 text-sm text-slate-600">
                 thyrolaboratories99@gmail.com
               </p>
@@ -111,7 +125,7 @@ export const Contact = () => {
           <div className="space-y-6">
             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-crisp">
               <iframe
-                title="THYRO LABORATORIES location map"
+                title={tr("contact.mapTitle", "THYRO LABORATORIES location map")}
                 className="h-80 w-full"
                 loading="lazy"
                 src="https://maps.google.com/maps?q=Opposite%20Abhaya%20Hospital%20Doctors%20Colony%20Miryalaguda%20Telangana%20508207&t=&z=15&ie=UTF8&iwloc=&output=embed"
@@ -128,17 +142,19 @@ export const Contact = () => {
                 </div>
                 <div>
                   <p className="text-sm font-bold uppercase text-thyro-green">
-                    Contact Form
+                    {tr("contact.form.eyebrow", "Contact Form")}
                   </p>
                   <h2 className="text-xl font-black text-thyro-navy">
-                    Send an enquiry
+                    {tr("contact.form.heading", "Send an enquiry")}
                   </h2>
                 </div>
               </div>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="font-bold text-slate-700">Full Name</span>
+                  <span className="font-bold text-slate-700">
+                    {tr("profile.personal.fullName", "Full Name")}
+                  </span>
                   <input
                     className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
                     {...register("name")}
@@ -151,7 +167,9 @@ export const Contact = () => {
                 </label>
 
                 <label className="block text-sm">
-                  <span className="font-bold text-slate-700">Phone Number</span>
+                  <span className="font-bold text-slate-700">
+                    {tr("profile.personal.phoneNumber", "Phone Number")}
+                  </span>
                   <input
                     className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
                     {...register("phone")}
@@ -165,7 +183,9 @@ export const Contact = () => {
               </div>
 
               <label className="mt-4 block text-sm">
-                <span className="font-bold text-slate-700">Email</span>
+                <span className="font-bold text-slate-700">
+                  {tr("profile.personal.email", "Email")}
+                </span>
                 <input
                   type="email"
                   className="mt-2 h-12 w-full rounded-md border border-slate-200 px-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
@@ -179,7 +199,9 @@ export const Contact = () => {
               </label>
 
               <label className="mt-4 block text-sm">
-                <span className="font-bold text-slate-700">Message</span>
+                <span className="font-bold text-slate-700">
+                  {tr("contact.form.message", "Message")}
+                </span>
                 <textarea
                   rows={5}
                   className="mt-2 w-full resize-none rounded-md border border-slate-200 px-3 py-3 outline-none transition focus:border-thyro-blue focus:ring-4 focus:ring-thyro-sky"
@@ -194,8 +216,10 @@ export const Contact = () => {
 
               {submitted && (
                 <p className="mt-4 rounded-md bg-thyro-mint px-4 py-3 text-sm font-bold text-thyro-green">
-                  Your enquiry is ready. Please use call, WhatsApp, or email for the
-                  fastest response.
+                  {tr(
+                    "contact.form.success",
+                    "Your enquiry is ready. Please use call, WhatsApp, or email for the fastest response.",
+                  )}
                 </p>
               )}
 
@@ -203,7 +227,7 @@ export const Contact = () => {
                 type="submit"
                 className="mt-5 inline-flex h-12 items-center justify-center rounded-full bg-thyro-blue px-6 text-sm font-bold text-white shadow-crisp transition hover:bg-thyro-navy"
               >
-                Submit Enquiry
+                {tr("contact.form.submit", "Submit Enquiry")}
               </button>
             </form>
           </div>

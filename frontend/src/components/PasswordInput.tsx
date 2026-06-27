@@ -1,5 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 import { forwardRef, useState, type InputHTMLAttributes } from "react";
+import { useTranslation } from "react-i18next";
 
 type PasswordInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 
@@ -8,8 +9,11 @@ const inputClasses =
 
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
   ({ className, disabled, ...props }, ref) => {
+    const { t } = useTranslation();
     const [isVisible, setIsVisible] = useState(false);
     const Icon = isVisible ? EyeOff : Eye;
+    const tr = (key: string, defaultValue: string) =>
+      t(key, { defaultValue }) as string;
 
     return (
       <div className="relative mt-2">
@@ -22,7 +26,11 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
         />
         <button
           type="button"
-          aria-label={isVisible ? "Hide password" : "Show password"}
+          aria-label={
+            isVisible
+              ? tr("password.hide", "Hide password")
+              : tr("password.show", "Show password")
+          }
           aria-pressed={isVisible}
           disabled={disabled}
           onClick={() => setIsVisible((current) => !current)}

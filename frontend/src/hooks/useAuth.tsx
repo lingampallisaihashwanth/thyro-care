@@ -2,11 +2,13 @@ import {
   createContext,
   type PropsWithChildren,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
 import type { RegisteredUser } from "../types";
 import { syncProfile } from "../services/api";
+import i18n, { defaultLanguage, normalizeLanguage } from "../i18n";
 import {
   clearSession,
   getCurrentUser,
@@ -32,6 +34,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [user, setUser] = useState<RegisteredUser | null>(() => getCurrentUser());
 
+  useEffect(() => {
+    void i18n.changeLanguage(normalizeLanguage(user?.languagePreference));
+  }, [user?.languagePreference]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -46,12 +52,14 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           fullName: newUser.fullName.trim(),
           phone: newUser.phone.trim(),
           email: newUser.email.trim().toLowerCase(),
+          languagePreference: defaultLanguage,
         };
 
         const profile = await syncProfile(normalizedUser);
         const persistedUser: RegisteredUser = {
           ...normalizedUser,
           id: profile.id,
+          languagePreference: normalizeLanguage(profile.language_preference),
         };
 
         saveRegisteredUser(persistedUser);
@@ -78,8 +86,15 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           gender: registeredUser.gender,
           address: registeredUser.address,
           profilePhoto: registeredUser.profilePhoto,
+          languagePreference: registeredUser.languagePreference,
         });
-        const persistedUser = updateRegisteredUser({ id: profile.id }) ?? registeredUser;
+        const persistedUser =
+          updateRegisteredUser({
+            id: profile.id,
+            languagePreference: normalizeLanguage(
+              profile.language_preference ?? registeredUser.languagePreference,
+            ),
+          }) ?? registeredUser;
 
         startSession(persistedUser.email);
         setUser(persistedUser);
@@ -103,8 +118,15 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           gender: nextUser.gender,
           address: nextUser.address,
           profilePhoto: nextUser.profilePhoto,
+          languagePreference: nextUser.languagePreference,
         });
-        const updated = updateRegisteredUser({ ...updates, id: profile.id });
+        const updated = updateRegisteredUser({
+          ...updates,
+          id: profile.id,
+          languagePreference: normalizeLanguage(
+            profile.language_preference ?? nextUser.languagePreference,
+          ),
+        });
         if (updated) {
           setUser(updated);
         }

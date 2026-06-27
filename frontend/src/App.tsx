@@ -1,4 +1,5 @@
 import { Outlet, Route, Routes } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { FloatingContactButtons } from "./components/FloatingContactButtons";
 import { Footer } from "./components/Footer";
 import { Navbar } from "./components/Navbar";
@@ -25,15 +26,23 @@ const AppShell = () => (
   </div>
 );
 
-const NotFound = () => (
-  <main className="bg-white px-4 py-20 text-center sm:px-6 lg:px-8">
-    <p className="text-sm font-bold uppercase text-thyro-green">404</p>
-    <h1 className="mt-3 text-4xl font-black text-thyro-navy">Page not found</h1>
-    <p className="mx-auto mt-4 max-w-md text-slate-600">
-      The page you are looking for is not available.
-    </p>
-  </main>
-);
+const NotFound = () => {
+  const { t } = useTranslation();
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
+
+  return (
+    <main className="bg-white px-4 py-20 text-center sm:px-6 lg:px-8">
+      <p className="text-sm font-bold uppercase text-thyro-green">404</p>
+      <h1 className="mt-3 text-4xl font-black text-thyro-navy">
+        {tr("notFound.title", "Page not found")}
+      </h1>
+      <p className="mx-auto mt-4 max-w-md text-slate-600">
+        {tr("notFound.message", "The page you are looking for is not available.")}
+      </p>
+    </main>
+  );
+};
 
 export const App = () => (
   <Routes>

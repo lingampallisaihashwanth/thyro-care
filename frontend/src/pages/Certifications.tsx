@@ -1,7 +1,11 @@
 import { Award, CalendarDays, FileBadge, ShieldCheck } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const certifications = [
   {
+    titleKey: "certifications.government.title",
+    authorityLabelKey: "certifications.authority",
+    authorityKey: "certifications.government.authority",
     title: "Government Registered Diagnostic Centre",
     authorityLabel: "Authority",
     authority: "District Registration Authority - Nalgonda",
@@ -11,6 +15,9 @@ const certifications = [
     accent: "green",
   },
   {
+    titleKey: "certifications.biomedical.title",
+    authorityLabelKey: "certifications.provider",
+    authorityKey: "certifications.biomedical.authority",
     title: "Biomedical Waste Management",
     authorityLabel: "Provider",
     authority: "Roma Industries",
@@ -21,15 +28,23 @@ const certifications = [
   },
 ];
 
-export const Certifications = () => (
-  <main className="bg-white">
+export const Certifications = () => {
+  const { t } = useTranslation();
+  const tr = (key: string, defaultValue: string) =>
+    t(key, { defaultValue }) as string;
+
+  return (
+    <main className="bg-white">
     <section className="bg-thyro-mint px-4 py-14 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <p className="text-sm font-bold uppercase text-thyro-green">
-          Certifications
+          {tr("certifications.eyebrow", "Certifications")}
         </p>
         <h1 className="mt-3 max-w-3xl text-4xl font-black text-thyro-navy">
-          Professional laboratory registrations and compliance.
+          {tr(
+            "certifications.heading",
+            "Professional laboratory registrations and compliance.",
+          )}
         </h1>
       </div>
     </section>
@@ -55,21 +70,21 @@ export const Certifications = () => (
                 <Icon className="h-7 w-7" />
               </div>
               <h2 className="mt-5 text-2xl font-black text-thyro-navy">
-                {certification.title}
+                {tr(certification.titleKey, certification.title)}
               </h2>
               <dl className="mt-6 space-y-4">
                 <div className="rounded-lg bg-slate-50 p-4">
                   <dt className="text-xs font-bold uppercase text-slate-500">
-                    {certification.authorityLabel}
+                    {tr(certification.authorityLabelKey, certification.authorityLabel)}
                   </dt>
                   <dd className="mt-1 font-bold text-slate-700">
-                    {certification.authority}
+                    {tr(certification.authorityKey, certification.authority)}
                   </dd>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-4">
                   <dt className="flex items-center gap-2 text-xs font-bold uppercase text-slate-500">
                     <FileBadge className="h-4 w-4" />
-                    Registration Number
+                    {tr("certifications.registrationNumber", "Registration Number")}
                   </dt>
                   <dd className="mt-1 font-bold text-slate-700">
                     {certification.registration}
@@ -78,7 +93,7 @@ export const Certifications = () => (
                 <div className="rounded-lg bg-slate-50 p-4">
                   <dt className="flex items-center gap-2 text-xs font-bold uppercase text-slate-500">
                     <CalendarDays className="h-4 w-4" />
-                    Validity
+                    {tr("certifications.validity", "Validity")}
                   </dt>
                   <dd className="mt-1 font-bold text-slate-700">
                     {certification.validity}
@@ -90,5 +105,6 @@ export const Certifications = () => (
         })}
       </div>
     </section>
-  </main>
-);
+    </main>
+  );
+};

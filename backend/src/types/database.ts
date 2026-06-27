@@ -8,10 +8,16 @@ export type Json =
 
 export type BookingStatus =
   | "Requested"
+  | "Pending"
   | "Confirmed"
+  | "Sample Collection Scheduled"
   | "Sample Collected"
+  | "Processing"
+  | "Report Ready"
   | "Completed"
   | "Cancelled";
+
+export type LanguagePreference = "en" | "te" | "hi" | "ta" | "kn" | "ml";
 
 export type BookingType =
   | "Home Sample Collection"
@@ -25,6 +31,7 @@ export type Profile = {
   full_name: string;
   phone: string;
   email: string;
+  language_preference?: LanguagePreference | null;
   created_at: string;
 };
 
@@ -41,6 +48,7 @@ export type Booking = {
   appointment_date: string | null;
   preferred_time_slot: string;
   status: string;
+  cancelled_at?: string | null;
   created_at: string;
   updated_at: string;
 };

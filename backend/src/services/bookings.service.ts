@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   BookingsQueryInput,
+  CancelBookingInput,
   CreateBookingInput,
   UpdateBookingInput
 } from "../validators/bookings.validators";
@@ -13,6 +14,10 @@ import { notificationsService } from "./notifications.service";
 type Client = SupabaseClient<Database>;
 type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
 type BookingUpdate = Database["public"]["Tables"]["bookings"]["Update"];
+
+const cancellableStatuses = new Set(["Requested", "Pending"]);
+
+let supportsCancelledAt: boolean | null = null;
 
 const toBookingInsert = (booking: CreateBookingInput) => ({
   profile_id: booking.profileId ?? null,
@@ -59,9 +64,22 @@ const toBookingResponse = (booking: BookingRow) => ({
   booking_date: booking.appointment_date ?? "",
   preferred_time_slot: booking.preferred_time_slot,
   status: booking.status,
+  cancelled_at:
+    booking.cancelled_at ?? (booking.status === "Cancelled" ? booking.updated_at : null),
   created_at: booking.created_at,
   updated_at: booking.updated_at
 });
+
+const hasCancelledAt = async (client: Client) => {
+  if (supportsCancelledAt !== null) {
+    return supportsCancelledAt;
+  }
+
+  const { error } = await client.from("bookings").select("cancelled_at").limit(1);
+  supportsCancelledAt = !error;
+
+  return supportsCancelledAt;
+};
 
 export const bookingsService = {
   async create(client: Client, payload: CreateBookingInput) {
@@ -178,6 +196,53 @@ export const bookingsService = {
 
     if (error) {
       throwSupabaseError(error, "Unable to update booking");
+    }
+
+    if (!data) {
+      throw new AppError(404, "Booking not found", "BOOKING_NOT_FOUND");
+    }
+
+    return toBookingResponse(data);
+  },
+
+  async cancel(client: Client, id: string, payload: CancelBookingInput = {}) {
+    const current = await this.findById(client, id);
+
+    if (
+      payload.userEmail &&
+      current.user_email.toLowerCase() !== payload.userEmail.trim().toLowerCase()
+    ) {
+      throw new AppError(403, "This booking does not belong to the logged-in user", "FORBIDDEN");
+    }
+
+    if (!cancellableStatuses.has(current.status)) {
+      const message =
+        current.status === "Confirmed"
+          ? "This booking has already been confirmed by THYRO LABORATORIES. Once a booking is confirmed, it cannot be cancelled online. Please contact the laboratory for further assistance."
+          : "This booking cannot be cancelled online.";
+
+      throw new AppError(409, message, "BOOKING_CANNOT_BE_CANCELLED", {
+        status: current.status
+      });
+    }
+
+    const updatePayload: BookingUpdate & { cancelled_at?: string } = {
+      status: "Cancelled"
+    };
+
+    if (await hasCancelledAt(client)) {
+      updatePayload.cancelled_at = new Date().toISOString();
+    }
+
+    const { data, error } = await client
+      .from("bookings")
+      .update(updatePayload)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+
+    if (error) {
+      throwSupabaseError(error, "Unable to cancel booking");
     }
 
     if (!data) {

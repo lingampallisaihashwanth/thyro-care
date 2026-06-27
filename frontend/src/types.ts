@@ -22,6 +22,7 @@ export type RegisteredUser = {
   phone: string;
   email: string;
   password: string;
+  languagePreference?: LanguagePreference;
   dateOfBirth?: string;
   gender?: string;
   address?: string;
@@ -35,10 +36,16 @@ export type BookingType =
 
 export type BookingStatus =
   | "Requested"
+  | "Pending"
   | "Confirmed"
+  | "Sample Collection Scheduled"
   | "Sample Collected"
+  | "Processing"
+  | "Report Ready"
   | "Completed"
   | "Cancelled";
+
+export type LanguagePreference = "en" | "te" | "hi" | "ta" | "kn" | "ml";
 
 export type Booking = {
   id?: string;
@@ -53,6 +60,7 @@ export type Booking = {
   bookingDate: string;
   preferredTimeSlot: string;
   status: BookingStatus;
+  cancelledAt?: string | null;
   createdAt: string;
   updatedAt?: string | null;
 };
