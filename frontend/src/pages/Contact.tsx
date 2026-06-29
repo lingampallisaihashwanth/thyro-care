@@ -1,24 +1,26 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, MapPin, MessageCircle, Phone, Send } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
-const contactSchema = z.object({
-  name: z.string().min(2, "Name is required."),
-  phone: z.string().min(10, "Phone number is required."),
-  email: z.string().email("Enter a valid email address."),
-  message: z.string().min(10, "Message must be at least 10 characters."),
-});
+const createContactSchema = (tr: (key: string, defaultValue: string) => string) =>
+  z.object({
+    name: z.string().min(2, tr("validation.name", "Name is required.")),
+    phone: z.string().min(10, tr("validation.phoneRequired", "Phone number is required.")),
+    email: z.string().email(tr("validation.emailInvalid", "Enter a valid email address.")),
+    message: z.string().min(10, tr("validation.messageMin", "Message must be at least 10 characters.")),
+  });
 
-type ContactFormValues = z.infer<typeof contactSchema>;
+type ContactFormValues = z.infer<ReturnType<typeof createContactSchema>>;
 
 export const Contact = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [submitted, setSubmitted] = useState(false);
   const tr = (key: string, defaultValue: string) =>
     t(key, { defaultValue }) as string;
+  const contactSchema = useMemo(() => createContactSchema(tr), [i18n.language]);
   const {
     register,
     handleSubmit,

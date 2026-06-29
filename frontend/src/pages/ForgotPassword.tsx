@@ -1,29 +1,37 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Mail, Send } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { StaticLogo } from "../components/Logo";
 import { sendPasswordResetEmail } from "../services/supabaseAuth";
+import { translateKnownMessage } from "../utils/translation";
 
-const forgotPasswordSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .min(1, "Email is required.")
-    .email("Enter a valid email address."),
-});
+const createForgotPasswordSchema = (
+  tr: (key: string, defaultValue: string) => string,
+) =>
+  z.object({
+    email: z
+      .string()
+      .trim()
+      .min(1, tr("validation.emailRequired", "Email is required."))
+      .email(tr("validation.emailInvalid", "Enter a valid email address.")),
+  });
 
-type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+type ForgotPasswordValues = z.infer<ReturnType<typeof createForgotPasswordSchema>>;
 
 export const ForgotPassword = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const tr = (key: string, defaultValue: string) =>
     t(key, { defaultValue }) as string;
+  const forgotPasswordSchema = useMemo(
+    () => createForgotPasswordSchema(tr),
+    [i18n.language],
+  );
   const {
     register,
     handleSubmit,
@@ -50,7 +58,7 @@ export const ForgotPassword = () => {
     } catch (error) {
       setFormError(
         error instanceof Error
-          ? error.message
+          ? translateKnownMessage(t, error.message)
           : tr("forgotPassword.error", "Unable to send password reset email."),
       );
     }

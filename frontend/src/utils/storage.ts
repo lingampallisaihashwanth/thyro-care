@@ -1,9 +1,10 @@
-import type { Booking, RegisteredUser } from "../types";
+import type { Booking, LanguagePreference, RegisteredUser } from "../types";
 
 const STORAGE_KEYS = {
   user: "thyro_registered_user",
   sessionEmail: "thyro_session_email",
   bookings: "thyro_bookings",
+  languagePreference: "thyro_language_preference",
 };
 
 const canUseStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
@@ -87,4 +88,18 @@ export const getBookingsForUser = (email: string) =>
 export const addBooking = (booking: Booking) => {
   const bookings = getBookings();
   writeJson(STORAGE_KEYS.bookings, [...bookings, booking]);
+};
+
+export const getCachedLanguagePreference = () => {
+  if (!canUseStorage()) {
+    return null;
+  }
+
+  return window.localStorage.getItem(STORAGE_KEYS.languagePreference);
+};
+
+export const saveCachedLanguagePreference = (language: LanguagePreference) => {
+  if (canUseStorage()) {
+    window.localStorage.setItem(STORAGE_KEYS.languagePreference, language);
+  }
 };

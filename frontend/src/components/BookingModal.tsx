@@ -1,14 +1,21 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarClock, LogIn, MapPin, UserRound, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { z } from "zod";
-import { formatPrice } from "../data/tests";
 import { useAuth } from "../hooks/useAuth";
 import { createBooking, getApiErrorMessage, syncProfile } from "../services/api";
 import type { Booking, BookingType, LabTest } from "../types";
+import {
+  formatTranslatedPrice,
+  translateBookingType,
+  translateKnownMessage,
+  translateReportTime,
+  translateTestCategory,
+  translateTestName,
+} from "../utils/translation";
 
 const bookingTypes: BookingType[] = [
   "Home Sample Collection",
@@ -24,17 +31,18 @@ const timeSlots = [
   "05:00 PM - 07:00 PM",
 ];
 
-const bookingSchema = z.object({
-  bookingType: z.enum([
-    "Home Sample Collection",
-    "Laboratory Visit",
-    "Request Callback",
-  ]),
-  bookingDate: z.string().min(1, "Preferred date is required."),
-  preferredTimeSlot: z.string().min(1, "Preferred time slot is required."),
-});
+const createBookingSchema = (tr: (key: string, defaultValue: string) => string) =>
+  z.object({
+    bookingType: z.enum([
+      "Home Sample Collection",
+      "Laboratory Visit",
+      "Request Callback",
+    ]),
+    bookingDate: z.string().min(1, tr("validation.preferredDate", "Preferred date is required.")),
+    preferredTimeSlot: z.string().min(1, tr("validation.preferredTimeSlot", "Preferred time slot is required.")),
+  });
 
-type BookingFormValues = z.infer<typeof bookingSchema>;
+type BookingFormValues = z.infer<ReturnType<typeof createBookingSchema>>;
 
 type BookingModalProps = {
   test: LabTest;
@@ -46,13 +54,12 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => {
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
   const tr = (key: string, defaultValue: string) =>
     t(key, { defaultValue }) as string;
-  const translateBookingType = (type: BookingType) =>
-    tr(`booking.types.${type}`, type);
+  const bookingSchema = useMemo(() => createBookingSchema(tr), [i18n.language]);
   const {
     register,
     handleSubmit,
@@ -87,6 +94,7 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
             gender: user.gender,
             address: user.address,
             profilePhoto: user.profilePhoto,
+            languagePreference: user.languagePreference,
           });
           profileId = profile.id;
         } catch (profileError) {
@@ -113,7 +121,7 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
       setSubmitSuccess(tr("booking.messages.submitted", "Booking submitted successfully."));
       onBooked(booking);
     } catch (error) {
-      setSubmitError(getApiErrorMessage(error));
+      setSubmitError(translateKnownMessage(t, getApiErrorMessage(error)));
     }
   };
 
@@ -131,10 +139,10 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
               {tr("booking.selectedTest", "Selected Test")}
             </p>
             <h2 id="booking-title" className="mt-1 text-2xl font-extrabold text-thyro-navy">
-              {test.name}
+              {translateTestName(t, test.name)}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              {test.category} | {formatPrice(test.price)} | {tr("booking.report", "Report")}: {test.reportTime}
+              {translateTestCategory(t, test.category)} | {formatTranslatedPrice(t, test.price)} | {tr("booking.report", "Report")}: {translateReportTime(t, test.reportTime)}
             </p>
           </div>
           <button
@@ -240,7 +248,7 @@ export const BookingModal = ({ test, onClose, onBooked }: BookingModalProps) => 
                       className="h-4 w-4 accent-thyro-green"
                       {...register("bookingType")}
                     />
-                    {translateBookingType(type)}
+                    {translateBookingType(t, type)}
                   </label>
                 ))}
               </div>

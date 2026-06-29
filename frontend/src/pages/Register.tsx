@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LockKeyhole, Mail, Phone, UserRound, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, Navigate, useNavigate } from "react-router-dom";
@@ -8,29 +8,32 @@ import { z } from "zod";
 import { StaticLogo } from "../components/Logo";
 import { PasswordInput } from "../components/PasswordInput";
 import { useAuth } from "../hooks/useAuth";
+import { translateKnownMessage } from "../utils/translation";
 
-const registerSchema = z
-  .object({
-    fullName: z.string().min(2, "Full name is required."),
-    phone: z.string().regex(/^[0-9]{10}$/, "Enter a 10 digit phone number."),
-    email: z.string().email("Enter a valid email address."),
-    password: z.string().min(6, "Password must be at least 6 characters."),
-    confirmPassword: z.string().min(1, "Confirm your password."),
-  })
-  .refine((values) => values.password === values.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"],
-  });
+const createRegisterSchema = (tr: (key: string, defaultValue: string) => string) =>
+  z
+    .object({
+      fullName: z.string().min(2, tr("validation.fullName", "Full name is required.")),
+      phone: z.string().regex(/^[0-9]{10}$/, tr("validation.phone10", "Enter a 10 digit phone number.")),
+      email: z.string().email(tr("validation.emailInvalid", "Enter a valid email address.")),
+      password: z.string().min(6, tr("validation.passwordMin", "Password must be at least 6 characters.")),
+      confirmPassword: z.string().min(1, tr("validation.confirmPassword", "Confirm your password.")),
+    })
+    .refine((values) => values.password === values.confirmPassword, {
+      message: tr("validation.passwordsMatch", "Passwords do not match."),
+      path: ["confirmPassword"],
+    });
 
-type RegisterFormValues = z.infer<typeof registerSchema>;
+type RegisterFormValues = z.infer<ReturnType<typeof createRegisterSchema>>;
 
 export const Register = () => {
   const { user, registerUser } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [formError, setFormError] = useState("");
   const navigate = useNavigate();
   const tr = (key: string, defaultValue: string) =>
     t(key, { defaultValue }) as string;
+  const registerSchema = useMemo(() => createRegisterSchema(tr), [i18n.language]);
   const {
     register,
     handleSubmit,
@@ -62,7 +65,11 @@ export const Register = () => {
       });
       navigate("/profile", { replace: true });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : tr("register.error", "Unable to register."));
+      setFormError(
+        error instanceof Error
+          ? translateKnownMessage(t, error.message)
+          : tr("register.error", "Unable to register."),
+      );
     }
   };
 

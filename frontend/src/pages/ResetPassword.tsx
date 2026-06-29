@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { KeyRound, LoaderCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,21 +12,25 @@ import {
   preparePasswordRecoverySession,
   updatePasswordFromRecovery,
 } from "../services/supabaseAuth";
+import { translateKnownMessage } from "../utils/translation";
 
-const resetPasswordSchema = z
-  .object({
-    newPassword: z.string().min(6, "Password must be at least 6 characters."),
-    confirmPassword: z.string().min(1, "Confirm your new password."),
-  })
-  .refine((values) => values.newPassword === values.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"],
-  });
+const createResetPasswordSchema = (
+  tr: (key: string, defaultValue: string) => string,
+) =>
+  z
+    .object({
+      newPassword: z.string().min(6, tr("validation.passwordMin", "Password must be at least 6 characters.")),
+      confirmPassword: z.string().min(1, tr("validation.confirmNewPassword", "Confirm your new password.")),
+    })
+    .refine((values) => values.newPassword === values.confirmPassword, {
+      message: tr("validation.passwordsMatch", "Passwords do not match."),
+      path: ["confirmPassword"],
+    });
 
-type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
+type ResetPasswordValues = z.infer<ReturnType<typeof createResetPasswordSchema>>;
 
 export const ResetPassword = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [session, setSession] = useState<Session | null>(null);
   const [isPreparingSession, setIsPreparingSession] = useState(true);
   const [formError, setFormError] = useState("");
@@ -34,6 +38,10 @@ export const ResetPassword = () => {
   const navigate = useNavigate();
   const tr = (key: string, defaultValue: string) =>
     t(key, { defaultValue }) as string;
+  const resetPasswordSchema = useMemo(
+    () => createResetPasswordSchema(tr),
+    [i18n.language],
+  );
   const {
     register,
     handleSubmit,
@@ -60,7 +68,7 @@ export const ResetPassword = () => {
         if (isMounted) {
           setFormError(
             error instanceof Error
-              ? error.message
+              ? translateKnownMessage(t, error.message)
               : tr("resetPassword.verifyError", "Unable to verify password reset link."),
           );
         }
@@ -103,7 +111,9 @@ export const ResetPassword = () => {
       }, 1200);
     } catch (error) {
       setFormError(
-        error instanceof Error ? error.message : tr("resetPassword.error", "Unable to reset password."),
+        error instanceof Error
+          ? translateKnownMessage(t, error.message)
+          : tr("resetPassword.error", "Unable to reset password."),
       );
     }
   };

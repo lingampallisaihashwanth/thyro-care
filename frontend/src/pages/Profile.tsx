@@ -18,7 +18,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { EmptyState } from "../components/EmptyState";
 import { StaticLogo } from "../components/Logo";
-import { formatPrice } from "../data/tests";
 import { useAuth } from "../hooks/useAuth";
 import { normalizeLanguage, supportedLanguages } from "../i18n";
 import {
@@ -30,25 +29,44 @@ import {
 } from "../services/api";
 import { subscribeToBookingChanges } from "../services/supabaseRealtime";
 import type { Booking, BookingStatus, LanguagePreference, Notification, Report } from "../types";
+import { saveCachedLanguagePreference } from "../utils/storage";
+import {
+  formatTranslatedPrice,
+  languageToLocale,
+  translateBookingStatus,
+  translateBookingType,
+  translateKnownMessage,
+  translateNotificationMessage,
+  translateNotificationTitle,
+  translateReportStatus,
+  translateTestCategory,
+  translateTestName,
+} from "../utils/translation";
 
-const editProfileSchema = z.object({
-  fullName: z.string().min(2, "Full name is required."),
-  phone: z.string().regex(/^[0-9]{10}$/, "Enter a 10 digit phone number."),
-});
-
-const passwordSchema = z
-  .object({
-    currentPassword: z.string().min(1, "Current password is required."),
-    nextPassword: z.string().min(6, "New password must be at least 6 characters."),
-    confirmPassword: z.string().min(1, "Confirm your new password."),
-  })
-  .refine((values) => values.nextPassword === values.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"],
+const createEditProfileSchema = (
+  tr: (key: string, defaultValue: string) => string,
+) =>
+  z.object({
+    fullName: z.string().min(2, tr("validation.fullName", "Full name is required.")),
+    phone: z.string().regex(/^[0-9]{10}$/, tr("validation.phone10", "Enter a 10 digit phone number.")),
   });
 
-type EditProfileValues = z.infer<typeof editProfileSchema>;
-type PasswordValues = z.infer<typeof passwordSchema>;
+const createPasswordSchema = (
+  tr: (key: string, defaultValue: string) => string,
+) =>
+  z
+    .object({
+      currentPassword: z.string().min(1, tr("validation.currentPassword", "Current password is required.")),
+      nextPassword: z.string().min(6, tr("validation.nextPasswordMin", "New password must be at least 6 characters.")),
+      confirmPassword: z.string().min(1, tr("validation.confirmNewPassword", "Confirm your new password.")),
+    })
+    .refine((values) => values.nextPassword === values.confirmPassword, {
+      message: tr("validation.passwordsMatch", "Passwords do not match."),
+      path: ["confirmPassword"],
+    });
+
+type EditProfileValues = z.infer<ReturnType<typeof createEditProfileSchema>>;
+type PasswordValues = z.infer<ReturnType<typeof createPasswordSchema>>;
 type SettingsPanel = "edit" | "password";
 type ProfileLocationState = {
   bookingSuccess?: string;
@@ -84,7 +102,7 @@ const cancellableStatuses = new Set<BookingStatus>(["Requested", "Pending"]);
 const bookingKey = (booking: Booking) =>
   booking.id ?? `${booking.userEmail}-${booking.testName}-${booking.createdAt}`;
 
-const valueOrFallback = (value?: string | null, fallback = "Not Provided") =>
+const valueOrFallback = (value: string | null | undefined, fallback: string) =>
   value && value.trim() ? value : fallback;
 
 const parseBookingDate = (booking: Booking) => {
@@ -92,22 +110,26 @@ const parseBookingDate = (booking: Booking) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
 };
 
-const formatBookingDate = (date: string) => {
+const formatBookingDate = (date: string, locale: string) => {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) {
     return date;
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
   }).format(parsed);
 };
 
-const formatDateTime = (value?: string | null) => {
+const formatDateTime = (
+  value: string | null | undefined,
+  locale: string,
+  fallback: string,
+) => {
   if (!value) {
-    return "Not Available";
+    return fallback;
   }
 
   const parsed = new Date(value);
@@ -115,7 +137,7 @@ const formatDateTime = (value?: string | null) => {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -145,9 +167,23 @@ export const Profile = () => {
   const [bookingDialog, setBookingDialog] = useState<BookingDialogState>(null);
   const [cancelError, setCancelError] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<LanguagePreference>(
+    () => normalizeLanguage(user?.languagePreference),
+  );
   const userEmail = user?.email ?? "";
   const tr = (key: string, defaultValue: string) =>
     t(key, { defaultValue }) as string;
+  const editProfileSchema = useMemo(
+    () => createEditProfileSchema(tr),
+    [i18n.language],
+  );
+  const passwordSchema = useMemo(
+    () => createPasswordSchema(tr),
+    [i18n.language],
+  );
+  const currentLocale = languageToLocale(i18n.language);
+  const notProvided = tr("common.notProvided", "Not Provided");
+  const notAvailable = tr("common.notAvailable", "Not Available");
 
   const editForm = useForm<EditProfileValues>({
     resolver: zodResolver(editProfileSchema),
@@ -165,6 +201,10 @@ export const Profile = () => {
       confirmPassword: "",
     },
   });
+
+  useEffect(() => {
+    setSelectedLanguage(normalizeLanguage(user?.languagePreference));
+  }, [user?.languagePreference]);
 
   const loadProfileData = useCallback(async () => {
     if (!userEmail) {
@@ -187,24 +227,30 @@ export const Profile = () => {
       if (bookingsResult.status === "fulfilled") {
         setBookings(bookingsResult.value);
       } else {
-        setBookingsError(getApiErrorMessage(bookingsResult.reason));
+        setBookingsError(
+          translateKnownMessage(t, getApiErrorMessage(bookingsResult.reason)),
+        );
       }
 
       if (reportsResult.status === "fulfilled") {
         setReports(reportsResult.value);
       } else {
-        setReportsError(getApiErrorMessage(reportsResult.reason));
+        setReportsError(
+          translateKnownMessage(t, getApiErrorMessage(reportsResult.reason)),
+        );
       }
 
       if (notificationsResult.status === "fulfilled") {
         setNotifications(notificationsResult.value);
       } else {
-        setNotificationsError(getApiErrorMessage(notificationsResult.reason));
+        setNotificationsError(
+          translateKnownMessage(t, getApiErrorMessage(notificationsResult.reason)),
+        );
       }
     } finally {
       setApiLoading(false);
     }
-  }, [userEmail]);
+  }, [t, userEmail]);
 
   useEffect(() => {
     if (!userEmail) {
@@ -289,18 +335,18 @@ export const Profile = () => {
     return null;
   }
 
-  const currentLanguage = normalizeLanguage(user.languagePreference);
+  const currentLanguage = selectedLanguage;
   const selectableLanguages = supportedLanguages.filter(
     (language) => language.isSelectable,
   );
 
   const personalInfo = [
-    { label: tr("profile.personal.fullName", "Full Name"), value: valueOrFallback(user.fullName) },
-    { label: tr("profile.personal.phoneNumber", "Phone Number"), value: valueOrFallback(user.phone) },
-    { label: tr("profile.personal.email", "Email"), value: valueOrFallback(user.email) },
-    { label: tr("profile.personal.dateOfBirth", "Date Of Birth"), value: valueOrFallback(user.dateOfBirth) },
-    { label: tr("profile.personal.gender", "Gender"), value: valueOrFallback(user.gender) },
-    { label: tr("profile.personal.address", "Address"), value: valueOrFallback(user.address) },
+    { label: tr("profile.personal.fullName", "Full Name"), value: valueOrFallback(user.fullName, notProvided) },
+    { label: tr("profile.personal.phoneNumber", "Phone Number"), value: valueOrFallback(user.phone, notProvided) },
+    { label: tr("profile.personal.email", "Email"), value: valueOrFallback(user.email, notProvided) },
+    { label: tr("profile.personal.dateOfBirth", "Date Of Birth"), value: valueOrFallback(user.dateOfBirth, notProvided) },
+    { label: tr("profile.personal.gender", "Gender"), value: valueOrFallback(user.gender, notProvided) },
+    { label: tr("profile.personal.address", "Address"), value: valueOrFallback(user.address, notProvided) },
     {
       label: tr("profile.personal.profilePhoto", "Profile Photo"),
       value: user.profilePhoto ? tr("profile.personal.uploaded", "Uploaded") : tr("profile.personal.notUploaded", "Not Uploaded"),
@@ -317,7 +363,7 @@ export const Profile = () => {
       });
       setSettingsMessage(tr("profile.messages.profileUpdated", "Profile updated in the database."));
     } catch (error) {
-      setSettingsError(getApiErrorMessage(error));
+      setSettingsError(translateKnownMessage(t, getApiErrorMessage(error)));
     }
   };
 
@@ -331,7 +377,9 @@ export const Profile = () => {
       setSettingsMessage(tr("profile.messages.passwordChanged", "Password changed."));
     } catch (error) {
       setSettingsError(
-        error instanceof Error ? error.message : tr("profile.errors.changePassword", "Unable to change password."),
+        error instanceof Error
+          ? translateKnownMessage(t, error.message)
+          : tr("profile.errors.changePassword", "Unable to change password."),
       );
     }
   };
@@ -339,13 +387,15 @@ export const Profile = () => {
   const onLanguageChange = async (language: LanguagePreference) => {
     setLanguageError("");
     setLanguageMessage("");
+    setSelectedLanguage(language);
+    saveCachedLanguagePreference(language);
+    await i18n.changeLanguage(language);
 
     try {
       await updateUser({ languagePreference: language });
-      await i18n.changeLanguage(language);
-      setLanguageMessage(tr("profile.messages.languageSaved", "Language preference saved."));
+      setLanguageMessage(i18n.t("profile.messages.languageSaved") as string);
     } catch (error) {
-      setLanguageError(getApiErrorMessage(error));
+      setLanguageError(translateKnownMessage(t, getApiErrorMessage(error)));
     }
   };
 
@@ -389,7 +439,7 @@ export const Profile = () => {
       setPageMessage(tr("profile.bookings.cancelSuccess", "Booking cancelled successfully."));
       setBookingDialog(null);
     } catch (error) {
-      setCancelError(getApiErrorMessage(error));
+      setCancelError(translateKnownMessage(t, getApiErrorMessage(error)));
     } finally {
       setIsCancelling(false);
     }
@@ -410,16 +460,16 @@ export const Profile = () => {
             {tr("profile.bookings.testName", "Test Name")}
           </p>
           <h3 className="mt-1 text-lg font-black text-thyro-navy">
-            {booking.testName}
+            {translateTestName(t, booking.testName)}
           </h3>
           <p className="mt-1 text-sm font-semibold text-slate-500">
-            {booking.category} | {formatPrice(booking.price)}
+            {translateTestCategory(t, booking.category)} | {formatTranslatedPrice(t, booking.price)}
           </p>
           <p className="mt-3 text-xs font-bold uppercase text-slate-500">
             {tr("profile.bookings.bookingId", "Booking ID")}
           </p>
           <p className="mt-1 break-all text-sm font-bold text-slate-700">
-            {valueOrFallback(booking.id)}
+            {valueOrFallback(booking.id, notProvided)}
           </p>
         </div>
 
@@ -429,7 +479,7 @@ export const Profile = () => {
               {tr("profile.bookings.bookingDate", "Booking Date")}
             </p>
             <p className="mt-1 font-bold text-slate-700">
-              {formatBookingDate(booking.bookingDate)}
+              {formatBookingDate(booking.bookingDate, currentLocale)}
             </p>
           </div>
           <div>
@@ -447,14 +497,16 @@ export const Profile = () => {
             <p className="text-xs font-bold uppercase text-slate-500">
               {tr("profile.bookings.bookingMode", "Booking Mode")}
             </p>
-            <p className="mt-1 font-bold text-slate-700">{booking.bookingType}</p>
+            <p className="mt-1 font-bold text-slate-700">
+              {translateBookingType(t, booking.bookingType)}
+            </p>
           </div>
           <div>
             <p className="text-xs font-bold uppercase text-slate-500">
               {tr("profile.bookings.createdDate", "Created Date")}
             </p>
             <p className="mt-1 font-bold text-slate-700">
-              {formatDateTime(booking.createdAt)}
+              {formatDateTime(booking.createdAt, currentLocale, notAvailable)}
             </p>
           </div>
         </div>
@@ -464,7 +516,7 @@ export const Profile = () => {
             {tr("profile.bookings.bookingStatus", "Booking Status")}
           </p>
           <span className="inline-flex min-h-9 items-center justify-center rounded-full bg-thyro-sky px-4 py-2 text-sm font-extrabold text-thyro-blue">
-            {booking.status}
+            {translateBookingStatus(t, booking.status)}
           </span>
           {report?.reportUrl && (
             <a
@@ -613,7 +665,7 @@ export const Profile = () => {
               >
                 {selectableLanguages.map((language) => (
                   <option key={language.code} value={language.code}>
-                    {language.label}
+                    {tr(`profile.language.labels.${language.code}`, language.label)}
                   </option>
                 ))}
               </select>
@@ -719,11 +771,11 @@ export const Profile = () => {
                           {tr("profile.bookings.testName", "Test Name")}
                         </p>
                         <h3 className="mt-1 text-lg font-black text-thyro-navy">
-                          {report.testName}
+                          {translateTestName(t, report.testName)}
                         </h3>
                         {report.resultSummary && (
                           <p className="mt-1 text-sm text-slate-500">
-                            {report.resultSummary}
+                            {translateKnownMessage(t, report.resultSummary)}
                           </p>
                         )}
                       </div>
@@ -732,12 +784,12 @@ export const Profile = () => {
                           {tr("profile.reports.generated", "Generated")}
                         </p>
                         <p className="mt-1 font-bold text-slate-700">
-                          {formatDateTime(report.createdAt)}
+                          {formatDateTime(report.createdAt, currentLocale, notAvailable)}
                         </p>
                       </div>
                       <div className="flex flex-col gap-2 sm:items-end">
                         <span className="inline-flex h-9 items-center justify-center rounded-full bg-thyro-sky px-4 text-sm font-extrabold text-thyro-blue">
-                          {report.status}
+                          {translateReportStatus(t, report.status)}
                         </span>
                         {report.reportUrl && (
                           <a
@@ -798,13 +850,13 @@ export const Profile = () => {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <h3 className="text-lg font-black text-thyro-navy">
-                            {notification.title}
+                            {translateNotificationTitle(t, notification)}
                           </h3>
                           <p className="mt-1 text-sm leading-6 text-slate-600">
-                            {notification.message}
+                            {translateNotificationMessage(t, notification)}
                           </p>
                           <p className="mt-2 text-xs font-bold uppercase text-slate-500">
-                            {formatDateTime(notification.createdAt)}
+                            {formatDateTime(notification.createdAt, currentLocale, notAvailable)}
                           </p>
                         </div>
                         <span

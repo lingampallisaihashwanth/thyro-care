@@ -3,14 +3,21 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { BookingModal } from "../components/BookingModal";
-import { formatPrice, labTests, testCategories } from "../data/tests";
+import { labTests, testCategories } from "../data/tests";
 import type { Booking, LabTest, TestCategory } from "../types";
+import {
+  formatTranslatedPrice,
+  translateReportTime,
+  translateTestCategory,
+  translateTestDescription,
+  translateTestName,
+} from "../utils/translation";
 
 type CategoryFilter = "All" | TestCategory;
 type SortMode = "featured" | "priceLow" | "priceHigh";
 
 export const Tests = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("All");
   const [sortMode, setSortMode] = useState<SortMode>("featured");
@@ -23,12 +30,18 @@ export const Tests = () => {
     const normalizedQuery = query.trim().toLowerCase();
 
     const matches = labTests.filter((test) => {
+      const translatedName = translateTestName(t, test.name).toLowerCase();
+      const translatedCategory = translateTestCategory(t, test.category).toLowerCase();
+      const translatedDescription = translateTestDescription(t, test).toLowerCase();
       const matchesCategory = category === "All" || test.category === category;
       const matchesQuery =
         !normalizedQuery ||
         test.name.toLowerCase().includes(normalizedQuery) ||
+        translatedName.includes(normalizedQuery) ||
         test.category.toLowerCase().includes(normalizedQuery) ||
-        test.description.toLowerCase().includes(normalizedQuery);
+        translatedCategory.includes(normalizedQuery) ||
+        test.description.toLowerCase().includes(normalizedQuery) ||
+        translatedDescription.includes(normalizedQuery);
 
       return matchesCategory && matchesQuery;
     });
@@ -52,7 +65,7 @@ export const Tests = () => {
 
       return sortMode === "priceLow" ? a.price - b.price : b.price - a.price;
     });
-  }, [category, query, sortMode]);
+  }, [category, i18n.language, query, sortMode, t]);
 
   const handleBooked = (booking: Booking) => {
     setSelectedTest(null);
@@ -106,7 +119,7 @@ export const Tests = () => {
                 <option value="All">{tr("tests.allCategories", "All Categories")}</option>
                 {testCategories.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {translateTestCategory(t, item)}
                   </option>
                 ))}
               </select>
@@ -139,24 +152,26 @@ export const Tests = () => {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-bold uppercase text-thyro-green">
-                      {test.category}
+                      {translateTestCategory(t, test.category)}
                     </p>
                     <h2 className="mt-2 text-xl font-black text-thyro-navy">
-                      {test.name}
+                      {translateTestName(t, test.name)}
                     </h2>
                   </div>
                   <span className="rounded-full bg-thyro-sky px-3 py-1 text-sm font-extrabold text-thyro-blue">
-                    {formatPrice(test.price)}
+                    {formatTranslatedPrice(t, test.price)}
                   </span>
                 </div>
                 <p className="mt-4 flex-1 text-sm leading-6 text-slate-600">
-                  {test.description}
+                  {translateTestDescription(t, test)}
                 </p>
                 <div className="mt-5 rounded-lg bg-slate-50 p-3 text-sm">
                   <span className="font-bold text-slate-500">
                     {tr("tests.reportTime", "Report Time: ")}
                   </span>
-                  <span className="font-bold text-thyro-navy">{test.reportTime}</span>
+                  <span className="font-bold text-thyro-navy">
+                    {translateReportTime(t, test.reportTime)}
+                  </span>
                 </div>
                 <button
                   type="button"

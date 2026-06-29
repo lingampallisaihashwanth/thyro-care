@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LockKeyhole, LogIn, Mail } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
@@ -8,13 +8,15 @@ import { z } from "zod";
 import { StaticLogo } from "../components/Logo";
 import { PasswordInput } from "../components/PasswordInput";
 import { useAuth } from "../hooks/useAuth";
+import { translateKnownMessage } from "../utils/translation";
 
-const loginSchema = z.object({
-  email: z.string().email("Enter a valid email address."),
-  password: z.string().min(1, "Password is required."),
-});
+const createLoginSchema = (tr: (key: string, defaultValue: string) => string) =>
+  z.object({
+    email: z.string().email(tr("validation.emailInvalid", "Enter a valid email address.")),
+    password: z.string().min(1, tr("validation.passwordRequired", "Password is required.")),
+  });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginFormValues = z.infer<ReturnType<typeof createLoginSchema>>;
 
 type LocationState = {
   from?: {
@@ -25,7 +27,7 @@ type LocationState = {
 
 export const Login = () => {
   const { user, loginUser } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [formError, setFormError] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,6 +41,7 @@ export const Login = () => {
     : "";
   const tr = (key: string, defaultValue: string) =>
     t(key, { defaultValue }) as string;
+  const loginSchema = useMemo(() => createLoginSchema(tr), [i18n.language]);
   const {
     register,
     handleSubmit,
@@ -62,7 +65,11 @@ export const Login = () => {
       await loginUser(values.email, values.password);
       navigate(from, { replace: true });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : tr("login.error", "Unable to login."));
+      setFormError(
+        error instanceof Error
+          ? translateKnownMessage(t, error.message)
+          : tr("login.error", "Unable to login."),
+      );
     }
   };
 

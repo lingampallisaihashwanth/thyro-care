@@ -11,9 +11,11 @@ import { syncProfile } from "../services/api";
 import i18n, { defaultLanguage, normalizeLanguage } from "../i18n";
 import {
   clearSession,
+  getCachedLanguagePreference,
   getCurrentUser,
   getRegisteredUser,
   saveRegisteredUser,
+  saveCachedLanguagePreference,
   startSession,
   updateRegisteredUser,
 } from "../utils/storage";
@@ -35,7 +37,11 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [user, setUser] = useState<RegisteredUser | null>(() => getCurrentUser());
 
   useEffect(() => {
-    void i18n.changeLanguage(normalizeLanguage(user?.languagePreference));
+    const nextLanguage = normalizeLanguage(
+      user?.languagePreference ?? getCachedLanguagePreference(),
+    );
+    saveCachedLanguagePreference(nextLanguage);
+    void i18n.changeLanguage(nextLanguage);
   }, [user?.languagePreference]);
 
   const value = useMemo<AuthContextValue>(
@@ -44,7 +50,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       registerUser: async (newUser) => {
         const existingUser = getRegisteredUser();
         if (existingUser?.email.toLowerCase() === newUser.email.toLowerCase()) {
-          throw new Error("An account with this email already exists.");
+          throw new Error(i18n.t("auth.errors.duplicateEmail") as string);
         }
 
         const normalizedUser = {
@@ -62,6 +68,9 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           languagePreference: normalizeLanguage(profile.language_preference),
         };
 
+        saveCachedLanguagePreference(
+          normalizeLanguage(persistedUser.languagePreference),
+        );
         saveRegisteredUser(persistedUser);
         startSession(persistedUser.email);
         setUser(persistedUser);
@@ -71,11 +80,11 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         const normalizedEmail = email.trim().toLowerCase();
 
         if (!registeredUser || registeredUser.email.toLowerCase() !== normalizedEmail) {
-          throw new Error("No registered account was found for this email.");
+          throw new Error(i18n.t("auth.errors.noAccount") as string);
         }
 
         if (registeredUser.password !== password) {
-          throw new Error("The email or password is incorrect.");
+          throw new Error(i18n.t("auth.errors.incorrectPassword") as string);
         }
 
         const profile = await syncProfile({
@@ -96,6 +105,9 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
             ),
           }) ?? registeredUser;
 
+        saveCachedLanguagePreference(
+          normalizeLanguage(persistedUser.languagePreference),
+        );
         startSession(persistedUser.email);
         setUser(persistedUser);
       },
@@ -106,7 +118,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       updateUser: async (updates) => {
         const registeredUser = getRegisteredUser();
         if (!registeredUser) {
-          throw new Error("No registered account was found.");
+          throw new Error(i18n.t("auth.errors.noRegisteredAccount") as string);
         }
 
         const nextUser = { ...registeredUser, ...updates };
@@ -128,6 +140,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           ),
         });
         if (updated) {
+          saveCachedLanguagePreference(normalizeLanguage(updated.languagePreference));
           setUser(updated);
         }
       },
@@ -135,7 +148,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         const registeredUser = getRegisteredUser();
 
         if (!registeredUser || registeredUser.password !== currentPassword) {
-          throw new Error("The current password is incorrect.");
+          throw new Error(i18n.t("auth.errors.currentPassword") as string);
         }
 
         const updated = updateRegisteredUser({ password: nextPassword });
@@ -154,7 +167,7 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error("useAuth must be used within AuthProvider.");
+    throw new Error(i18n.t("auth.errors.authProvider") as string);
   }
 
   return context;

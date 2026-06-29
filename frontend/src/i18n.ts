@@ -1,6 +1,10 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { en } from "./locales/en";
+import { hi } from "./locales/hi";
+import { te } from "./locales/te";
 import type { LanguagePreference } from "./types";
+import { getCachedLanguagePreference } from "./utils/storage";
 
 export const defaultLanguage: LanguagePreference = "en";
 
@@ -31,14 +35,14 @@ export const normalizeLanguage = (
 
 i18n.use(initReactI18next).init({
   resources: {
-    en: { translation: {} },
-    te: { translation: {} },
-    hi: { translation: {} },
-    ta: { translation: {} },
-    kn: { translation: {} },
-    ml: { translation: {} },
+    en: { translation: en },
+    te: { translation: te },
+    hi: { translation: hi },
+    ta: { translation: en },
+    kn: { translation: en },
+    ml: { translation: en },
   },
-  lng: defaultLanguage,
+  lng: normalizeLanguage(getCachedLanguagePreference()),
   fallbackLng: defaultLanguage,
   interpolation: {
     escapeValue: false,

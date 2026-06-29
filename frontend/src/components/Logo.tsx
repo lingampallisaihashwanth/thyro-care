@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 type LogoProps = {
@@ -59,38 +60,46 @@ const LogoMark = () => (
   </svg>
 );
 
-export const Logo = ({ compact = false, className = "" }: LogoProps) => (
-  <Link
-    to="/"
-    className={`inline-flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-thyro-green ${className}`}
-    aria-label="THYRO LABORATORIES home"
-  >
-    <LogoMark />
-    {!compact && (
-      <span className="min-w-0">
-        <span className="block text-base font-extrabold leading-tight text-thyro-navy sm:text-lg">
-          THYRO LABORATORIES
-        </span>
-        <span className="block text-[11px] font-semibold uppercase leading-tight text-thyro-green sm:text-xs">
-          Smart Booking & Management System
-        </span>
-      </span>
-    )}
-  </Link>
-);
+export const Logo = ({ compact = false, className = "" }: LogoProps) => {
+  const { t } = useTranslation();
 
-export const StaticLogo = ({ compact = false, className = "" }: LogoProps) => (
-  <div className={`inline-flex items-center gap-3 ${className}`}>
-    <LogoMark />
-    {!compact && (
-      <span>
-        <span className="block text-base font-extrabold leading-tight text-thyro-navy sm:text-lg">
-          THYRO LABORATORIES
+  return (
+    <Link
+      to="/"
+      className={`inline-flex items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-thyro-green ${className}`}
+      aria-label={t("brand.homeAria") as string}
+    >
+      <LogoMark />
+      {!compact && (
+        <span className="min-w-0">
+          <span className="block text-base font-extrabold leading-tight text-thyro-navy sm:text-lg">
+            THYRO LABORATORIES
+          </span>
+          <span className="block text-[11px] font-semibold uppercase leading-tight text-thyro-green sm:text-xs">
+            {t("brand.subtitle") as string}
+          </span>
         </span>
-        <span className="block text-[11px] font-semibold uppercase leading-tight text-thyro-green sm:text-xs">
-          Smart Booking & Management System
+      )}
+    </Link>
+  );
+};
+
+export const StaticLogo = ({ compact = false, className = "" }: LogoProps) => {
+  const { t } = useTranslation();
+
+  return (
+    <div className={`inline-flex items-center gap-3 ${className}`}>
+      <LogoMark />
+      {!compact && (
+        <span>
+          <span className="block text-base font-extrabold leading-tight text-thyro-navy sm:text-lg">
+            THYRO LABORATORIES
+          </span>
+          <span className="block text-[11px] font-semibold uppercase leading-tight text-thyro-green sm:text-xs">
+            {t("brand.subtitle") as string}
+          </span>
         </span>
-      </span>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
+};
